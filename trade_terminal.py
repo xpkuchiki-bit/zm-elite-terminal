@@ -1,5 +1,6 @@
 import os
 import sys
+# Critical for Anaconda/Windows environment stability
 os.environ['NUMBA_SKIP_REQUIREMENTS_CHECK'] = '1'
 
 import streamlit as st
@@ -10,100 +11,93 @@ import pandas as pd
 import numpy as np
 import time
 
-# --- 1. PRO UI CONFIGURATION (IQ OPTION STYLE) ---
-st.set_page_config(layout="wide", page_title="ZM Elite Terminal", page_icon="💹", initial_sidebar_state="collapsed")
+# --- 1. PRO UI CONFIGURATION ---
+st.set_page_config(layout="wide", page_title="ZM Elite Terminal", page_icon="💹")
 
 st.markdown("""
     <style>
-    /* Dark Theme Base */
-    .stApp { background-color: #1b1e24; color: #a1a5b0; }
+    .stApp { background-color: #0b0e11; color: white; }
+    div[data-testid="stMetricValue"] { font-size: 1.8rem; color: #00ffbb; }
+    .stProgress > div > div > div > div { background-color: #00ffbb; }
     
-    /* Hide Default Header/Footer */
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
+    /* Custom Green and Red Call/Put Buttons */
+    div[data-testid="stSidebar"] div[data-testid="column"]:nth-of-type(1) button { background-color: #00ffbb !important; color: black !important; font-weight: bold; border: none; }
+    div[data-testid="stSidebar"] div[data-testid="column"]:nth-of-type(2) button { background-color: #ff3355 !important; color: white !important; font-weight: bold; border: none; }
     
-    /* Hide the sidebar toggle button to force the single-page look */
-    [data-testid="collapsedControl"] { display: none; }
+    /* Order Book & Ticker Styling */
+    .order-book-row { display: flex; justify-content: space-between; font-family: monospace; font-size: 0.85rem; }
+    .bid { color: #00ffbb; }
+    .ask { color: #ff3355; }
+    .live-ticker { font-size: 2rem; font-weight: bold; color: #00ffbb; font-family: monospace; }
     
-    /* Metric & Text Styling */
-    div[data-testid="stMetricValue"] { font-size: 1.5rem; color: #ffffff; }
-    div[data-testid="stMetricLabel"] { color: #a1a5b0; }
-    
-    /* IQ Option Style Big Buttons */
-    div[data-testid="column"]:nth-of-type(1) button { 
-        background-color: #26a69a !important; /* IQ Option Green */
-        color: white !important; 
-        font-weight: bold; 
-        font-size: 1.2rem;
-        height: 70px;
-        border-radius: 8px;
-        border: none;
-        width: 100%;
-    }
-    div[data-testid="column"]:nth-of-type(2) button { 
-        background-color: #ef5350 !important; /* IQ Option Red */
-        color: white !important; 
-        font-weight: bold; 
-        font-size: 1.2rem;
-        height: 70px;
-        border-radius: 8px;
-        border: none;
-        width: 100%;
-    }
-    
-    /* Sub-tabs styling to look sleek */
-    .stTabs [data-baseweb="tab-list"] { background-color: #23272e; border-radius: 8px; padding: 5px; }
-    .stTabs [data-baseweb="tab"] { color: #a1a5b0; }
-    .stTabs [aria-selected="true"] { color: #ffffff !important; background-color: #313640; border-radius: 5px; }
-    
-    /* Order Book & Links */
-    .bid { color: #26a69a; }
-    .ask { color: #ef5350; }
-    a { color: #26a69a !important; text-decoration: none; }
+    /* News Link Styling */
+    a { color: #00ffbb !important; text-decoration: none; }
     a:hover { text-decoration: underline; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. ASSET DICTIONARY ---
+# --- 2. THE COMPLETE, UNTRUNCATED ASSET DICTIONARY ---
 ASSETS = {
-    "Crypto": {"Bitcoin (BTC)": "BTC-USD", "Ethereum (ETH)": "ETH-USD", "Solana (SOL)": "SOL-USD", "Ripple (XRP)": "XRP-USD"},
-    "Forex": {"USD/ZMW (Kwacha)": "ZMW=X", "EUR/USD": "EURUSD=X", "GBP/USD": "GBPUSD=X", "USD/JPY": "JPY=X"},
-    "Stocks": {"Nvidia (NVDA)": "NVDA", "Tesla (TSLA)": "TSLA", "Apple (AAPL)": "AAPL"},
-    "Commodities": {"Gold": "GC=F", "Brent Crude": "BZ=F"},
-    "Indices & ETFs": {"S&P 500": "^GSPC", "Nasdaq 100": "^IXIC"}
+    "Crypto": {
+        "Bitcoin (BTC)": "BTC-USD", "Ethereum (ETH)": "ETH-USD", "Solana (SOL)": "SOL-USD", 
+        "Ripple (XRP)": "XRP-USD", "Dogecoin (DOGE)": "DOGE-USD"
+    },
+    "Forex": {
+        "USD/ZMW (Kwacha)": "ZMW=X", "EUR/USD": "EURUSD=X", "GBP/USD": "GBPUSD=X", 
+        "USD/JPY": "JPY=X", "AUD/USD": "AUDUSD=X"
+    },
+    "Stocks": {
+        "Nvidia (NVDA)": "NVDA", "Tesla (TSLA)": "TSLA", "Apple (AAPL)": "AAPL", 
+        "Microsoft (MSFT)": "MSFT", "Amazon (AMZN)": "AMZN"
+    },
+    "Commodities": {
+        "Gold": "GC=F", "Silver": "SI=F", "Brent Crude": "BZ=F", "Copper": "HG=F"
+    },
+    "Indices & ETFs": {
+        "S&P 500": "^GSPC", "Nasdaq 100": "^IXIC", "Bitcoin ETF (IBIT)": "IBIT"
+    }
 }
 
 # --- 3. SESSION STATE ---
-if 'balance' not in st.session_state: st.session_state.balance = 10000.00
+if 'balance' not in st.session_state: st.session_state.balance = 50000.00
 if 'active_trades' not in st.session_state: st.session_state.active_trades = []
 if 'acknowledged' not in st.session_state: st.session_state.acknowledged = False
 
+# --- 4. SEC COMPLIANCE DIALOG ---
 if not st.session_state.acknowledged:
     @st.dialog("🇿🇲 SEC Zambia Regulatory Portal")
     def auth_dialog():
         st.warning("High-Risk Financial Instrument Warning")
-        st.write("This platform is operating under the SEC Zambia Sandbox Framework.")
+        st.write("This platform is operating under the SEC Zambia Sandbox Framework. Trading involves significant risk to capital.")
         if st.button("I AGREE & ENTER TERMINAL", use_container_width=True):
             st.session_state.acknowledged = True
             st.rerun()
     auth_dialog()
     st.stop() 
 
-# --- 4. DATA ENGINES ---
+# --- 5. DATA ENGINES (Decoupled Fast/Slow Lanes) ---
+
+# Slow Lane: Chart Data (Updates every 60s so iframe stays solid for drawing)
 @st.cache_data(ttl=60)
 def fetch_chart_data(symbol, tf):
     try:
-        period = "5d" if tf in ["1m", "5m"] else "1mo"
+        period = "5d" if tf in ["1m", "5m", "15m"] else "1mo"
         df = yf.download(symbol, period=period, interval=tf, progress=False)
         if df.empty: return pd.DataFrame()
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.droplevel(1)
         df = df.dropna()
         if not df.empty:
             df['SMA_20'] = df['Close'].rolling(window=20).mean()
+            exp1 = df['Close'].ewm(span=12, adjust=False).mean()
+            exp2 = df['Close'].ewm(span=26, adjust=False).mean()
+            df['MACD'] = exp1 - exp2
+            df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+            df['Hist'] = df['MACD'] - df['Signal']
         return df
     except:
         return pd.DataFrame()
 
+# Fast Lane: Tick Data (Updates every 2s for PnL and Order Book)
 @st.cache_data(ttl=2)
 def fetch_live_price(symbol):
     try:
@@ -113,6 +107,7 @@ def fetch_live_price(symbol):
     except:
         return 0.0
 
+# Live News Engine (Updates every 60s to prevent API bans)
 @st.cache_data(ttl=60)
 def fetch_live_news(symbol):
     try:
@@ -120,135 +115,44 @@ def fetch_live_news(symbol):
         news_data = ticker.news
         if not news_data: news_data = yf.Ticker("^GSPC").news
         formatted_news = []
-        for item in news_data[:4]: 
+        for item in news_data[:3]: 
             content = item.get("content", item)
-            formatted_news.append({
-                "title": content.get("title", "Market Update"),
-                "link": content.get("clickThroughUrl", content.get("canonicalUrl", {})).get("url", "#"),
-                "publisher": content.get("provider", {}).get("displayName", "Global Wire")
-            })
+            title = content.get("title", "Market Update")
+            link = content.get("clickThroughUrl", content.get("canonicalUrl", {})).get("url", content.get("url", "#"))
+            publisher = content.get("provider", {}).get("displayName", content.get("publisher", "Global Wire"))
+            formatted_news.append({"title": title, "link": link, "publisher": publisher})
         return formatted_news
     except:
         return []
 
-# --- 5. TOP NAVIGATION BAR (IQ Style) ---
-top_col1, top_col2, top_col3, top_col4 = st.columns([1, 2, 6, 2])
-with top_col1:
-    st.markdown("<h3 style='color: #26a69a; margin-top: 0;'>ZM Elite</h3>", unsafe_allow_html=True)
-with top_col2:
-    asset_class = st.selectbox("Market", list(ASSETS.keys()), label_visibility="collapsed")
-    asset_name = st.selectbox("Asset", list(ASSETS[asset_class].keys()), label_visibility="collapsed")
+# --- 6. SIDEBAR MENU & EXECUTION ---
+with st.sidebar:
+    st.title("🇿🇲 ZM Elite Menu")
+    asset_class = st.selectbox("Category", list(ASSETS.keys()))
+    asset_name = st.selectbox("Asset", list(ASSETS[asset_class].keys()))
     ticker = ASSETS[asset_class][asset_name]
-with top_col3:
-    # Empty space to push balance to the right
-    pass
-with top_col4:
-    st.markdown(f"<div style='text-align: right; color: #26a69a; font-size: 1.5rem; font-weight: bold;'>${st.session_state.balance:,.2f}</div>", unsafe_allow_html=True)
-    st.markdown("<div style='text-align: right; font-size: 0.8rem; margin-top: -10px;'>Demo account ⯆</div>", unsafe_allow_html=True)
+    t_frame = st.selectbox("Timeframe", ["1m", "5m", "15m", "1h", "1d"], index=0)
 
-st.markdown("<hr style='margin: 0.5em 0; border-color: #313640;'>", unsafe_allow_html=True)
-
-# --- 6. MAIN LAYOUT (Chart Left, Exec Right) ---
-chart_col, exec_col = st.columns([3.5, 1])
 base_price = fetch_live_price(ticker)
 
-with chart_col:
-    # Fast Ticker Overlay
-    @st.fragment(run_every=2)
-    def render_live_ticker():
-        live_p = fetch_live_price(ticker) * (1 + np.random.uniform(-0.0001, 0.0001))
-        st.markdown(f"**{asset_name}** | Live: <span style='color:#26a69a;'>{live_p:,.4f}</span>", unsafe_allow_html=True)
-    render_live_ticker()
-
-    # The Heavy Chart
-    t_frame = "1m" # Locked to 1m for day trading feel
-    df = fetch_chart_data(ticker, t_frame)
-    if not df.empty:
-        fig = go.Figure(data=[go.Candlestick(
-            x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
-            increasing_line_color='#26a69a', decreasing_line_color='#ef5350'
-        )])
-        fig.update_layout(
-            template="plotly_dark", height=500, margin=dict(t=10, b=10, l=0, r=0),
-            paper_bgcolor="#1b1e24", plot_bgcolor="#1b1e24", 
-            xaxis=dict(showgrid=True, gridcolor='#2b303a'),
-            yaxis=dict(side="right", showgrid=True, gridcolor='#2b303a'),
-            showlegend=False, dragmode='pan',
-            xaxis_rangeslider_visible=False
-        )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'scrollZoom': True, 'displaylogo': False})
+with st.sidebar:
+    st.divider()
+    chart_style = st.radio("View Mode", ["Candlesticks (Pro)", "Line (Simple)"])
+    show_sma = st.checkbox("Show SMA 20 Trendline", value=True)
     
-    # --- ALL FEATURES PACKED INTO CLEAN TABS ---
-    tab1, tab2, tab3, tab4 = st.tabs(["📋 Active Positions", "📖 Order Book", "📰 Market News", "🏆 Leaderboard"])
-    
-    with tab1:
-        @st.fragment(run_every=2)
-        def render_trades():
-            if len(st.session_state.active_trades) == 0:
-                st.info("No open positions.")
-            else:
-                for trade in st.session_state.active_trades:
-                    live_p = fetch_live_price(ticker) * (1 + np.random.uniform(-0.0001, 0.0001))
-                    sim_p = live_p if trade['asset'] == asset_name else trade['entry'] * (1 + np.random.uniform(-0.0005, 0.0005))
-                    pnl = ((sim_p - trade['entry']) / trade['entry']) * trade['amount'] * 50 if trade['type'] == "CALL" else ((trade['entry'] - sim_p) / trade['entry']) * trade['amount'] * 50
-                    
-                    tc1, tc2, tc3, tc4, tc5 = st.columns([2, 1, 1.5, 1.5, 1])
-                    tc1.write(trade['asset'])
-                    tc2.markdown(f"<strong style='color:{'#26a69a' if trade['type'] == 'CALL' else '#ef5350'}'>{trade['type']}</strong>", unsafe_allow_html=True)
-                    tc3.write(f"${trade['amount']:,.2f}")
-                    tc4.markdown(f"<strong style='color:{'#26a69a' if pnl >= 0 else '#ef5350'}'>{pnl:+, .2f}</strong>", unsafe_allow_html=True)
-                    if tc5.button("Close", key=f"c_{trade['id']}"):
-                        st.session_state.balance += (trade['amount'] + pnl)
-                        st.session_state.active_trades.remove(trade)
-                        st.rerun()
-        render_trades()
-
-    with tab2:
-        @st.fragment(run_every=2)
-        def render_order_book():
-            cp = fetch_live_price(ticker)
-            if cp > 0:
-                cp = cp * (1 + np.random.uniform(-0.0001, 0.0001))
-                st.markdown(f"<div class='order-book-row ask'><span>{cp * 1.0003:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='order-book-row ask'><span>{cp * 1.0002:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='margin: 5px 0; color:#fff;'>Spread: 0.0001</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='order-book-row bid'><span>{cp * 0.9999:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='order-book-row bid'><span>{cp * 0.9998:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
-        render_order_book()
-        
-    with tab3:
-        live_news = fetch_live_news(ticker)
-        for article in live_news:
-            st.markdown(f"**[{article['title']}]({article['link']})** - *{article['publisher']}*")
-
-    with tab4:
-        st.write("🥇 **Kapiri_King** (+120%)")
-        st.write("🥈 **Lsk_Bull** (+85%)")
-
-with exec_col:
-    st.markdown("<div style='background-color: #23272e; padding: 20px; border-radius: 10px; height: 500px;'>", unsafe_allow_html=True)
-    
-    st.caption("Time")
-    st.selectbox("Expiry", ["1 Minute", "5 Minutes", "15 Minutes"], label_visibility="collapsed")
-    
-    st.caption("Amount ($)")
+    st.divider()
+    st.subheader("Order Placement")
     curr_bal = float(st.session_state.balance)
-    amount = st.number_input("Invest", min_value=1.0, max_value=max(1.0, curr_bal), value=min(10.0, curr_bal), label_visibility="collapsed")
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<div style='text-align: center; color: #a1a5b0;'>Expected return</div>", unsafe_allow_html=True)
-    st.markdown(f"<div style='text-align: center; color: #26a69a; font-weight: bold; font-size: 1.2rem;'>+${(amount * 0.87):.2f} (87%)</div>", unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
+    if curr_bal < 10.0:
+        st.error("Bankrupt! Reset below.")
+        amount = 0.0
+    else:
+        amount = st.number_input("Investment (ZMW)", min_value=10.0, max_value=max(10.0, curr_bal), value=min(1000.0, curr_bal))
     
-    b_col1, b_col2 = st.columns(2)
-    if b_col1.button("Higher ↗", disabled=(curr_bal < 1 or base_price == 0)):
+    c1, c2 = st.columns(2)
+    if c1.button("📈 CALL", use_container_width=True, disabled=(curr_bal < 10 or base_price == 0)):
         st.session_state.balance -= amount
         st.session_state.active_trades.append({"id": int(time.time()), "asset": asset_name, "type": "CALL", "amount": amount, "entry": base_price})
         st.rerun()
-        
-    if b_col2.button("Lower ↘", disabled=(curr_bal < 1 or base_price == 0)):
-        st.session_state.balance -= amount
-        st.session_state.active_trades.append({"id": int(time.time()), "asset": asset_name, "type": "PUT", "amount": amount, "entry": base_price})
-        st.rerun()
-        
-    st.markdown("</div>", unsafe_allow_html=True)
+    if c2.button("📉 PUT
