@@ -27,6 +27,10 @@ st.markdown("""
     .order-book-row { display: flex; justify-content: space-between; font-family: monospace; font-size: 0.85rem; }
     .bid { color: #00ffbb; }
     .ask { color: #ff3355; }
+    
+    /* News Link Styling */
+    a { color: #00ffbb !important; text-decoration: none; }
+    a:hover { text-decoration: underline; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -43,7 +47,9 @@ ASSETS = {
 if 'balance' not in st.session_state: st.session_state.balance = 50000.00
 if 'active_trades' not in st.session_state: st.session_state.active_trades = []
 
-# --- 4. DATA ENGINE (Cloud Safe) ---
+# --- 4. DATA ENGINES ---
+
+# 4A. Price Engine (Updates every 5 seconds)
 @st.cache_data(ttl=5)
 def fetch_elite_data(symbol, tf):
     try:
@@ -69,6 +75,28 @@ def fetch_elite_data(symbol, tf):
         return df
     except:
         return pd.DataFrame()
+
+# 4B. Live News Engine (Updates exactly every 60 seconds)
+@st.cache_data(ttl=60)
+def fetch_live_news(symbol):
+    try:
+        ticker = yf.Ticker(symbol)
+        news_data = ticker.news
+        
+        # If no news for exotic pairs (like ZMW), fallback to S&P 500 global market news
+        if not news_data:
+            news_data = yf.Ticker("^GSPC").news
+            
+        formatted_news = []
+        for item in news_data[:3]: # Grab the top 3 latest articles
+            formatted_news.append({
+                "title": item.get("title", "Market Update"),
+                "link": item.get("link", "#"),
+                "publisher": item.get("publisher", "Global Wire")
+            })
+        return formatted_news
+    except:
+        return []
 
 # --- 5. SIDEBAR ---
 with st.sidebar:
@@ -202,12 +230,21 @@ with side_col:
     st.caption("🥇 **Kapiri_King** (+120%)")
     st.caption("🥈 **Lsk_Bull** (+85%)")
 
-    # --- RESTORED NEWS FEED ---
+    # --- NEW: LIVE CLICKABLE NEWS FEED ---
     st.divider()
-    st.subheader("📰 Live Eco News")
-    st.warning("🇿🇲 **09:00** - Bank of Zambia Rate Decision")
-    st.info("🇺🇸 **14:30** - Fed Inflation Data Released")
-    st.error("📉 **Alert** - High Market Volatility Detected")
+    st.subheader("📰 Live Market News")
+    live_news = fetch_live_news(ticker)
+    
+    if live_news:
+        for article in live_news:
+            # Markdown link formatting: [Text](URL)
+            st.markdown(f"**[{article['title']}]({article['link']})**")
+            st.caption(f"Source: {article['publisher']}")
+            st.write("---")
+    else:
+        # Fallback if Yahoo News API is temporarily offline
+        st.warning("🇿🇲 **09:00** - [Bank of Zambia Rate Decision](https://www.boz.zm/)")
+        st.info("🇺🇸 **14:30** - [Fed Inflation Data Released](https://www.federalreserve.gov/)")
 
 # --- 7. CLOUD-SAFE HEARTBEAT ENGINE ---
 time.sleep(5) 
