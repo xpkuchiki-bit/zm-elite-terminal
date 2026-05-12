@@ -44,7 +44,7 @@ if 'balance' not in st.session_state: st.session_state.balance = 50000.00
 if 'active_trades' not in st.session_state: st.session_state.active_trades = []
 
 # --- 4. DATA ENGINE (Cloud Safe) ---
-@st.cache_data(ttl=5) # Changed TTL to match cloud heartbeat
+@st.cache_data(ttl=5)
 def fetch_elite_data(symbol, tf):
     try:
         period = "5d" if tf in ["1m", "5m", "15m"] else "1mo"
@@ -202,6 +202,13 @@ with side_col:
     st.caption("🥇 **Kapiri_King** (+120%)")
     st.caption("🥈 **Lsk_Bull** (+85%)")
 
+    # --- RESTORED NEWS FEED ---
+    st.divider()
+    st.subheader("📰 Live Eco News")
+    st.warning("🇿🇲 **09:00** - Bank of Zambia Rate Decision")
+    st.info("🇺🇸 **14:30** - Fed Inflation Data Released")
+    st.error("📉 **Alert** - High Market Volatility Detected")
+
 # --- 7. CLOUD-SAFE HEARTBEAT ENGINE ---
-time.sleep(5) # Give the Cloud time to breathe!
+time.sleep(5) 
 st.rerun()
