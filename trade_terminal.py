@@ -1,5 +1,6 @@
 import os
 import sys
+# Critical for Anaconda/Windows environment stability
 os.environ['NUMBA_SKIP_REQUIREMENTS_CHECK'] = '1'
 
 import streamlit as st
@@ -19,7 +20,7 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-size: 1.8rem; color: #00ffbb; }
     .stProgress > div > div > div > div { background-color: #00ffbb; }
     
-    /* Call/Put Button Colors */
+    /* Custom Green and Red Call/Put Buttons */
     div[data-testid="stSidebar"] div[data-testid="column"]:nth-of-type(1) button { background-color: #00ffbb !important; color: black !important; font-weight: bold; border: none; }
     div[data-testid="stSidebar"] div[data-testid="column"]:nth-of-type(2) button { background-color: #ff3355 !important; color: white !important; font-weight: bold; border: none; }
     
@@ -35,13 +36,26 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. THE COMPLETE ASSET DICTIONARY ---
+# --- 2. THE COMPLETE, UNTRUNCATED ASSET DICTIONARY ---
 ASSETS = {
-    "Crypto": {"Bitcoin (BTC)": "BTC-USD", "Ethereum (ETH)": "ETH-USD", "Solana (SOL)": "SOL-USD"},
-    "Forex": {"USD/ZMW (Kwacha)": "ZMW=X", "EUR/USD": "EURUSD=X", "GBP/USD": "GBPUSD=X"},
-    "Stocks": {"Nvidia (NVDA)": "NVDA", "Tesla (TSLA)": "TSLA", "Apple (AAPL)": "AAPL"},
-    "Commodities": {"Gold": "GC=F", "Brent Crude": "BZ=F"},
-    "Indices & ETFs": {"S&P 500": "^GSPC", "Nasdaq 100": "^IXIC"}
+    "Crypto": {
+        "Bitcoin (BTC)": "BTC-USD", "Ethereum (ETH)": "ETH-USD", "Solana (SOL)": "SOL-USD", 
+        "Ripple (XRP)": "XRP-USD", "Dogecoin (DOGE)": "DOGE-USD"
+    },
+    "Forex": {
+        "USD/ZMW (Kwacha)": "ZMW=X", "EUR/USD": "EURUSD=X", "GBP/USD": "GBPUSD=X", 
+        "USD/JPY": "JPY=X", "AUD/USD": "AUDUSD=X"
+    },
+    "Stocks": {
+        "Nvidia (NVDA)": "NVDA", "Tesla (TSLA)": "TSLA", "Apple (AAPL)": "AAPL", 
+        "Microsoft (MSFT)": "MSFT", "Amazon (AMZN)": "AMZN"
+    },
+    "Commodities": {
+        "Gold": "GC=F", "Silver": "SI=F", "Brent Crude": "BZ=F", "Copper": "HG=F"
+    },
+    "Indices & ETFs": {
+        "S&P 500": "^GSPC", "Nasdaq 100": "^IXIC", "Bitcoin ETF (IBIT)": "IBIT"
+    }
 }
 
 # --- 3. SESSION STATE ---
@@ -49,21 +63,29 @@ if 'balance' not in st.session_state: st.session_state.balance = 50000.00
 if 'active_trades' not in st.session_state: st.session_state.active_trades = []
 if 'acknowledged' not in st.session_state: st.session_state.acknowledged = False
 
-# --- 4. SEC COMPLIANCE DIALOG (Restored) ---
+# --- 4. SEC COMPLIANCE GATEWAY (Bulletproof Full-Page Splash) ---
 if not st.session_state.acknowledged:
-    @st.dialog("🇿🇲 SEC Zambia Regulatory Portal")
-    def auth_dialog():
-        st.warning("High-Risk Financial Instrument Warning")
-        st.write("This platform is operating under the SEC Zambia Sandbox Framework. Trading involves significant risk to capital.")
-        if st.button("I AGREE & ENTER TERMINAL", use_container_width=True):
+    st.markdown("<br><br><h1 style='text-align: center; color: #00ffbb;'>🇿🇲 ZM Elite Terminal</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: white;'>SEC Zambia Regulatory Sandbox</h3>", unsafe_allow_html=True)
+    st.markdown("<hr style='border-color: #333;'>", unsafe_allow_html=True)
+    
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        st.warning("⚠️ **High-Risk Financial Instrument Warning**")
+        st.info("This platform is operating under the SEC Zambia Sandbox Framework. Trading involves significant risk to capital. By proceeding, you acknowledge that this is a simulated environment.")
+        
+        # Adding a custom style just for this start button
+        st.markdown("""<style>div.stButton > button { background-color: #00ffbb; color: black; font-weight: bold; width: 100%; border: none; padding: 15px; }</style>""", unsafe_allow_html=True)
+        
+        if st.button("I AGREE & ENTER TERMINAL"):
             st.session_state.acknowledged = True
             st.rerun()
-    auth_dialog()
-    st.stop() 
+            
+    st.stop() # This halts the script safely here, showing ONLY the gateway above.
 
 # --- 5. DATA ENGINES (Decoupled Fast/Slow Lanes) ---
 
-# Slow Lane: Chart Data (Updates every 60s so iframe doesn't blink)
+# Slow Lane: Chart Data (Updates every 60s so iframe stays solid for drawing)
 @st.cache_data(ttl=60)
 def fetch_chart_data(symbol, tf):
     try:
@@ -83,7 +105,7 @@ def fetch_chart_data(symbol, tf):
     except:
         return pd.DataFrame()
 
-# Fast Lane: Tick Data (Cached briefly for order book & PnL)
+# Fast Lane: Tick Data (Updates every 2s for PnL and Order Book)
 @st.cache_data(ttl=2)
 def fetch_live_price(symbol):
     try:
@@ -93,7 +115,7 @@ def fetch_live_price(symbol):
     except:
         return 0.0
 
-# Live News Engine
+# Live News Engine (Updates every 60s to prevent API bans)
 @st.cache_data(ttl=60)
 def fetch_live_news(symbol):
     try:
@@ -111,7 +133,7 @@ def fetch_live_news(symbol):
     except:
         return []
 
-# --- 6. SIDEBAR MENU ---
+# --- 6. SIDEBAR MENU & EXECUTION ---
 with st.sidebar:
     st.title("🇿🇲 ZM Elite Menu")
     asset_class = st.selectbox("Category", list(ASSETS.keys()))
@@ -119,7 +141,6 @@ with st.sidebar:
     ticker = ASSETS[asset_class][asset_name]
     t_frame = st.selectbox("Timeframe", ["1m", "5m", "15m", "1h", "1d"], index=0)
 
-# Fetch Base Price for Trading Logic
 base_price = fetch_live_price(ticker)
 
 with st.sidebar:
@@ -166,7 +187,7 @@ with st.sidebar:
 main_col, side_col = st.columns([3, 1])
 
 with main_col:
-    # 7A. THE FAST LANE: Live Ticker
+    # 7A. FAST LANE: Live Ticker (Updates every 2 seconds)
     @st.fragment(run_every=2)
     def render_live_ticker():
         live_p = fetch_live_price(ticker) * (1 + np.random.uniform(-0.0001, 0.0001))
@@ -174,7 +195,7 @@ with main_col:
     
     render_live_ticker()
 
-    # 7B. THE SLOW LANE: Heavy Solid Chart
+    # 7B. SLOW LANE: Solid Interactive Chart
     df = fetch_chart_data(ticker, t_frame)
     if not df.empty:
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
@@ -203,13 +224,13 @@ with main_col:
     else:
         st.warning("Awaiting market data connection...")
 
-    # 7C. THE FAST LANE: Live Active Trades Table
+    # 7C. FAST LANE: Live Active Trades Table (Updates every 2 seconds)
     @st.fragment(run_every=2)
     def render_active_trades():
         st.divider()
         st.subheader("📋 Active Positions")
         if len(st.session_state.active_trades) == 0:
-            st.info("No open trades.")
+            st.info("No open trades. Select an asset and execute a CALL or PUT to enter the market.")
         else:
             t_cols = st.columns([1.5, 1, 1, 1, 1.5, 1])
             t_cols[0].write("**Asset**")
@@ -232,12 +253,12 @@ with main_col:
                 if t_col[5].button("✖ Close", key=f"close_{trade['id']}"):
                     st.session_state.balance += (trade['amount'] + pnl)
                     st.session_state.active_trades.remove(trade)
-                    st.rerun() # Full UI reset when closing trade
+                    st.rerun() 
     
     render_active_trades()
 
 with side_col:
-    # 7D. THE FAST LANE: Order Book & Gauge
+    # 7D. FAST LANE: Order Book & Gauge (Updates every 2 seconds)
     @st.fragment(run_every=2)
     def render_side_metrics():
         sentiment = np.random.randint(45, 75)
@@ -266,7 +287,7 @@ with side_col:
     st.caption("🥇 **Kapiri_King** (+120%)")
     st.caption("🥈 **Lsk_Bull** (+85%)")
 
-    # Static News Feed
+    # 7E. SLOW LANE: News Feed
     st.divider()
     st.subheader("📰 Live Market News")
     live_news = fetch_live_news(ticker)
@@ -278,5 +299,3 @@ with side_col:
     else:
         st.warning("🇿🇲 **09:00** - [Bank of Zambia Rate Decision](https://www.boz.zm/)")
         st.info("🇺🇸 **14:30** - [Fed Inflation Data Released](https://www.federalreserve.gov/)")
-
-# Notice: There is no longer a time.sleep() or st.rerun() at the bottom! The app is completely stable.
