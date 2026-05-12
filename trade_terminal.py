@@ -83,16 +83,30 @@ def fetch_live_news(symbol):
         ticker = yf.Ticker(symbol)
         news_data = ticker.news
         
-        # If no news for exotic pairs (like ZMW), fallback to S&P 500 global market news
+        # Fallback to global news if exotic asset (like ZMW) has no specific news
         if not news_data:
             news_data = yf.Ticker("^GSPC").news
             
         formatted_news = []
-        for item in news_data[:3]: # Grab the top 3 latest articles
+        for item in news_data[:3]: 
+            # FIX: Extract data from Yahoo's new nested 'content' JSON structure
+            content = item.get("content", item)
+            
+            # Extract Title
+            title = content.get("title", "Market Update")
+            
+            # Extract URL (Checking multiple possible new keys)
+            link_obj = content.get("clickThroughUrl", content.get("canonicalUrl", {}))
+            link = link_obj.get("url", content.get("url", "#"))
+            
+            # Extract Publisher
+            provider_obj = content.get("provider", {})
+            publisher = provider_obj.get("displayName", content.get("publisher", "Global Wire"))
+            
             formatted_news.append({
-                "title": item.get("title", "Market Update"),
-                "link": item.get("link", "#"),
-                "publisher": item.get("publisher", "Global Wire")
+                "title": title,
+                "link": link,
+                "publisher": publisher
             })
         return formatted_news
     except:
