@@ -22,15 +22,22 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    /* Compress the app padding to fit everything on one screen */
+    /* Compress the app padding but leave 3rem at the top so the arrow isn't blocked! */
     .stApp { background-color: #0b0e11; color: white; }
-    .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 100% !important; }
+    .block-container { padding-top: 3rem !important; padding-bottom: 0rem !important; max-width: 100% !important; }
     
-    /* Hide the annoying Streamlit deploy button natively */
+    /* Hide the developer tools but DO NOT collapse the header */
     .stAppDeployButton { display: none !important; }
-    header [data-testid="stToolbar"] { visibility: hidden !important; }
-    #MainMenu { visibility: hidden !important; }
-    header { background: transparent !important; height: 0px !important; }
+    header [data-testid="stToolbar"] { display: none !important; }
+    header { background: transparent !important; }
+    
+    /* 🔥 THE ARROW LIFESAVER: Forces the toggle button to stay visible and on top 🔥 */
+    [data-testid="collapsedControl"] { 
+        display: flex !important; 
+        visibility: visible !important; 
+        color: #00ffbb !important; 
+        z-index: 99999 !important; 
+    }
     
     div[data-testid="stMetricValue"] { font-size: 1.5rem; color: #00ffbb; }
     .stProgress > div > div > div > div { background-color: #00ffbb; }
@@ -43,7 +50,7 @@ st.markdown("""
     .order-book-row { display: flex; justify-content: space-between; font-family: monospace; font-size: 0.85rem; padding: 2px 0; }
     .bid { color: #00ffbb; }
     .ask { color: #ff3355; }
-    .live-ticker { font-size: 1.8rem; font-weight: bold; color: #00ffbb; font-family: monospace; margin-bottom: -15px; }
+    .live-ticker { font-size: 1.8rem; font-weight: bold; color: #00ffbb; font-family: monospace; margin-bottom: -15px; margin-top: -10px;}
     
     /* Sleek Tab Styling */
     .stTabs [data-baseweb="tab-list"] { background-color: transparent; }
