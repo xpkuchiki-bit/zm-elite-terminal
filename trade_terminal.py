@@ -12,18 +12,19 @@ import numpy as np
 import time
 
 # --- 1. PRO UI CONFIGURATION ---
-# Added initial_sidebar_state="expanded" so your menu is never trapped again
 st.set_page_config(layout="wide", page_title="ZM Elite Terminal", page_icon="💹", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
     .stApp { background-color: #0b0e11; color: white; }
     
-    /* HIDE STREAMLIT BRANDING ONLY (Leaving the sidebar toggle intact!) */
-    #MainMenu {visibility: hidden !important;}
-    footer {visibility: hidden !important;}
-    [data-testid="stToolbar"] {visibility: hidden !important;}
-    .stDeployButton {display: none !important;}
+    /* 🔥 SURGICAL CSS FIX: HIDE BRANDING, KEEP SIDEBAR MENU 🔥 */
+    .stDeployButton { display: none !important; }
+    [data-testid="stToolbar"] { display: none !important; }
+    #MainMenu { display: none !important; }
+    
+    /* Force the sidebar toggle button to always show and make it neon green! */
+    [data-testid="collapsedControl"] { display: flex !important; color: #00ffbb !important; }
     
     div[data-testid="stMetricValue"] { font-size: 1.8rem; color: #00ffbb; }
     .stProgress > div > div > div > div { background-color: #00ffbb; }
@@ -289,19 +290,4 @@ if not df.empty:
         showlegend=False, dragmode='pan' 
     )
     pro_config = {'displayModeBar': True, 'scrollZoom': True, 'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape']}
-    st.plotly_chart(fig, use_container_width=True, config=pro_config)
-else:
-    st.warning("Awaiting market data connection...")
-
-# 8B. SLOW LANE: News Feed
-st.divider()
-st.subheader("📰 Live Market News")
-live_news = fetch_live_news(ticker)
-if live_news:
-    for article in live_news:
-        st.markdown(f"**[{article['title']}]({article['link']})**")
-        st.caption(f"Source: {article['publisher']}")
-        st.write("---")
-else:
-    st.warning("🇿🇲 **09:00** - [Bank of Zambia Rate Decision](https://www.boz.zm/)")
-    st.info("🇺🇸 **14:30** - [Fed Inflation Data Released](https://www.federalreserve.gov/)")
+    st
