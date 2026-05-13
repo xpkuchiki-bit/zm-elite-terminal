@@ -22,22 +22,12 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    /* Compress the app padding but leave 3rem at the top so the arrow isn't blocked! */
+    /* Compress the app padding for Zero-Scroll, leaving exactly 3rem at the top so the arrow isn't squished! */
     .stApp { background-color: #0b0e11; color: white; }
     .block-container { padding-top: 3rem !important; padding-bottom: 0rem !important; max-width: 100% !important; }
     
-    /* Hide the developer tools but DO NOT collapse the header */
+    /* ONLY hide the Deploy button. We are no longer touching the header or toolbar! */
     .stAppDeployButton { display: none !important; }
-    header [data-testid="stToolbar"] { display: none !important; }
-    header { background: transparent !important; }
-    
-    /* 🔥 THE ARROW LIFESAVER: Forces the toggle button to stay visible and on top 🔥 */
-    [data-testid="collapsedControl"] { 
-        display: flex !important; 
-        visibility: visible !important; 
-        color: #00ffbb !important; 
-        z-index: 99999 !important; 
-    }
     
     div[data-testid="stMetricValue"] { font-size: 1.5rem; color: #00ffbb; }
     .stProgress > div > div > div > div { background-color: #00ffbb; }
