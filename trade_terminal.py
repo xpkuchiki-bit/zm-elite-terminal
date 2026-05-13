@@ -18,7 +18,7 @@ st.markdown("""
     <style>
     .stApp { background-color: #0b0e11; color: white; }
     
-    /* 🔥 HIDE STREAMLIT BRANDING & GITHUB ICONS 🔥 */
+    /* HIDE STREAMLIT BRANDING & GITHUB ICONS */
     header {visibility: hidden !important;}
     #MainMenu {visibility: hidden !important;}
     footer {visibility: hidden !important;}
@@ -71,7 +71,7 @@ if 'balance' not in st.session_state: st.session_state.balance = 50000.00
 if 'active_trades' not in st.session_state: st.session_state.active_trades = []
 if 'acknowledged' not in st.session_state: st.session_state.acknowledged = False
 
-# --- 4. SEC COMPLIANCE GATEWAY (Bulletproof Full-Page Splash) ---
+# --- 4. SEC COMPLIANCE GATEWAY ---
 if not st.session_state.acknowledged:
     st.markdown("<br><br><h1 style='text-align: center; color: #00ffbb;'>🇿🇲 ZM Elite Terminal</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; color: white;'>SEC Zambia Regulatory Sandbox</h3>", unsafe_allow_html=True)
@@ -82,18 +82,15 @@ if not st.session_state.acknowledged:
         st.warning("⚠️ **High-Risk Financial Instrument Warning**")
         st.info("This platform is operating under the SEC Zambia Sandbox Framework. Trading involves significant risk to capital. By proceeding, you acknowledge that this is a simulated environment.")
         
-        # Adding a custom style just for this start button
         st.markdown("""<style>div.stButton > button { background-color: #00ffbb; color: black; font-weight: bold; width: 100%; border: none; padding: 15px; }</style>""", unsafe_allow_html=True)
         
         if st.button("I AGREE & ENTER TERMINAL"):
             st.session_state.acknowledged = True
             st.rerun()
             
-    st.stop() # This halts the script safely here, showing ONLY the gateway above.
+    st.stop()
 
 # --- 5. DATA ENGINES (Decoupled Fast/Slow Lanes) ---
-
-# Slow Lane: Chart Data (Updates every 60s so iframe stays solid for drawing)
 @st.cache_data(ttl=60)
 def fetch_chart_data(symbol, tf):
     try:
@@ -113,7 +110,6 @@ def fetch_chart_data(symbol, tf):
     except:
         return pd.DataFrame()
 
-# Fast Lane: Tick Data (Updates every 2s for PnL and Order Book)
 @st.cache_data(ttl=2)
 def fetch_live_price(symbol):
     try:
@@ -123,7 +119,6 @@ def fetch_live_price(symbol):
     except:
         return 0.0
 
-# Live News Engine (Updates every 60s to prevent API bans)
 @st.cache_data(ttl=60)
 def fetch_live_news(symbol):
     try:
@@ -195,7 +190,6 @@ with st.sidebar:
 main_col, side_col = st.columns([3, 1])
 
 with main_col:
-    # 7A. FAST LANE: Live Ticker (Updates every 2 seconds)
     @st.fragment(run_every=2)
     def render_live_ticker():
         live_p = fetch_live_price(ticker) * (1 + np.random.uniform(-0.0001, 0.0001))
@@ -203,7 +197,6 @@ with main_col:
     
     render_live_ticker()
 
-    # 7B. SLOW LANE: Solid Interactive Chart
     df = fetch_chart_data(ticker, t_frame)
     if not df.empty:
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
@@ -223,4 +216,84 @@ with main_col:
         fig.update_layout(
             template="plotly_dark", xaxis_rangeslider_visible=False, height=550, 
             paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11", margin=dict(t=10, b=10, l=0, r=0),
-            yaxis=dict(side="right", autorange=True, fixed
+            yaxis=dict(side="right", autorange=True, fixedrange=False), 
+            yaxis2=dict(side="right", autorange=True, fixedrange=False),
+            showlegend=False, dragmode='pan' 
+        )
+        pro_config = {'displayModeBar': True, 'scrollZoom': True, 'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape']}
+        st.plotly_chart(fig, use_container_width=True, config=pro_config)
+    else:
+        st.warning("Awaiting market data connection...")
+
+    @st.fragment(run_every=2)
+    def render_active_trades():
+        st.divider()
+        st.subheader("📋 Active Positions")
+        if len(st.session_state.active_trades) == 0:
+            st.info("No open trades. Select an asset and execute a CALL or PUT to enter the market.")
+        else:
+            t_cols = st.columns([1.5, 1, 1, 1, 1.5, 1])
+            t_cols[0].write("**Asset**")
+            t_cols[1].write("**Type**")
+            t_cols[2].write("**Invested**")
+            t_cols[3].write("**Entry**")
+            t_cols[4].write("**Live PnL**")
+            
+            live_p = fetch_live_price(ticker) * (1 + np.random.uniform(-0.0001, 0.0001))
+            for trade in st.session_state.active_trades:
+                sim_price = live_p if trade['asset'] == asset_name else trade['entry'] * (1 + np.random.uniform(-0.0005, 0.0005))
+                pnl = ((sim_price - trade['entry']) / trade['entry']) * trade['amount'] * 50 if trade['type'] == "CALL" else ((trade['entry'] - sim_price) / trade['entry']) * trade['amount'] * 50
+
+                t_col = st.columns([1.5, 1, 1, 1, 1.5, 1])
+                t_col[0].write(trade['asset'])
+                t_col[1].markdown(f"<strong style='color:{'#00ffbb' if trade['type'] == 'CALL' else '#ff3355'}'>{trade['type']}</strong>", unsafe_allow_html=True)
+                t_col[2].write(f"{trade['amount']:,.2f}")
+                t_col[3].write(f"{trade['entry']:.4f}")
+                t_col[4].markdown(f"<strong style='color:{'#00ffbb' if pnl >= 0 else '#ff3355'}'>{pnl:+,.2f} ZMW</strong>", unsafe_allow_html=True)
+                if t_col[5].button("✖ Close", key=f"close_{trade['id']}"):
+                    st.session_state.balance += (trade['amount'] + pnl)
+                    st.session_state.active_trades.remove(trade)
+                    st.rerun() 
+    
+    render_active_trades()
+
+with side_col:
+    @st.fragment(run_every=2)
+    def render_side_metrics():
+        sentiment = np.random.randint(45, 75)
+        st.subheader("📊 Gauge")
+        st.progress(int(sentiment))
+        st.write(f"Buyers: **{sentiment}%** | Sellers: **{100-sentiment}%**")
+        
+        st.divider()
+        st.subheader("📖 Order Book (L2)")
+        cp = fetch_live_price(ticker)
+        if cp > 0:
+            cp = cp * (1 + np.random.uniform(-0.0001, 0.0001))
+            st.markdown(f"<div class='order-book-row ask'><span>{cp * 1.0003:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='order-book-row ask'><span>{cp * 1.0002:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='order-book-row ask'><span>{cp * 1.0001:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:center; font-weight:bold; margin: 5px 0; color:#fff;'>{cp:.4f}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='order-book-row bid'><span>{cp * 0.9999:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='order-book-row bid'><span>{cp * 0.9998:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='order-book-row bid'><span>{cp * 0.9997:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
+            
+    render_side_metrics()
+
+    st.divider()
+    st.subheader("🏆 Leaderboard")
+    st.metric("Wallet Balance", f"{st.session_state.balance:,.2f} ZMW")
+    st.caption("🥇 **Kapiri_King** (+120%)")
+    st.caption("🥈 **Lsk_Bull** (+85%)")
+
+    st.divider()
+    st.subheader("📰 Live Market News")
+    live_news = fetch_live_news(ticker)
+    if live_news:
+        for article in live_news:
+            st.markdown(f"**[{article['title']}]({article['link']})**")
+            st.caption(f"Source: {article['publisher']}")
+            st.write("---")
+    else:
+        st.warning("🇿🇲 **09:00** - [Bank of Zambia Rate Decision](https://www.boz.zm/)")
+        st.info("🇺🇸 **14:30** - [Fed Inflation Data Released](https://www.federalreserve.gov/)")
