@@ -1,5 +1,6 @@
 import os
 import sys
+# Critical for Anaconda/Windows environment stability
 os.environ['NUMBA_SKIP_REQUIREMENTS_CHECK'] = '1'
 
 import streamlit as st
@@ -21,23 +22,37 @@ st.set_page_config(
 
 st.markdown("""
     <style>
+    /* Compress the app padding for Zero-Scroll, leaving exactly 3rem at the top so the arrow isn't squished! */
     .stApp { background-color: #0b0e11; color: white; }
     .block-container { padding-top: 3rem !important; padding-bottom: 0rem !important; max-width: 100% !important; }
+    
+    /* ONLY hide the Deploy button. We are no longer touching the header or toolbar! */
     .stAppDeployButton { display: none !important; }
+    
+    /* 🔥 THE ARROW LIFESAVER: Forces the toggle button to stay visible and on top 🔥 */
+    [data-testid="collapsedControl"] { 
+        display: flex !important; 
+        visibility: visible !important; 
+        color: #00ffbb !important; 
+        z-index: 99999 !important; 
+    }
     
     div[data-testid="stMetricValue"] { font-size: 1.5rem; color: #00ffbb; }
     .stProgress > div > div > div > div { background-color: #00ffbb; }
     
+    /* Custom Green and Red Call/Put Buttons */
     div[data-testid="stSidebar"] div[data-testid="column"]:nth-of-type(1) button { background-color: #00ffbb !important; color: black !important; font-weight: bold; border: none; }
     div[data-testid="stSidebar"] div[data-testid="column"]:nth-of-type(2) button { background-color: #ff3355 !important; color: white !important; font-weight: bold; border: none; }
     
+    /* Order Book & Ticker Styling */
     .order-book-row { display: flex; justify-content: space-between; font-family: monospace; font-size: 0.85rem; padding: 2px 0; }
     .bid { color: #00ffbb; }
     .ask { color: #ff3355; }
     .live-ticker { font-size: 1.8rem; font-weight: bold; color: #00ffbb; font-family: monospace; margin-bottom: -15px; margin-top: -10px;}
     
+    /* Sleek Tab Styling */
     .stTabs [data-baseweb="tab-list"] { background-color: transparent; }
-    .stTabs [data-baseweb="tab"] { color: #a1a5b0; font-weight: bold; }
+    .stTabs [data-baseweb="tab"] { color: #a1a5b0; font-weight: bold; font-size: 0.85rem; }
     .stTabs [aria-selected="true"] { color: #00ffbb !important; }
     
     a { color: #00ffbb !important; text-decoration: none; }
@@ -74,7 +89,7 @@ if not st.session_state.acknowledged:
             st.rerun()
     st.stop()
 
-# --- 5. DATA ENGINES ---
+# --- 5. DATA ENGINES WITH HEIKIN-ASHI & ATR MATH ---
 @st.cache_data(ttl=60)
 def fetch_chart_data(symbol, tf):
     try:
@@ -91,11 +106,13 @@ def fetch_chart_data(symbol, tf):
             df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
             df['Hist'] = df['MACD'] - df['Signal']
             
+            # KVB
             df['KVB_Mid'] = df['Close'].rolling(window=20).mean()
             df['KVB_Std'] = df['Close'].rolling(window=20).std()
             df['KVB_Upper'] = df['KVB_Mid'] + (df['KVB_Std'] * 2.5)
             df['KVB_Lower'] = df['KVB_Mid'] - (df['KVB_Std'] * 2.5)
             
+            # ZEMO
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -103,9 +120,11 @@ def fetch_chart_data(symbol, tf):
             rsi_raw = 100 - (100 / (1 + rs))
             df['ZEMO'] = rsi_raw.ewm(span=5, adjust=False).mean()
             
+            # ATR
             df['TR'] = np.maximum((df['High'] - df['Low']), np.maximum(abs(df['High'] - df['Close'].shift(1)), abs(df['Low'] - df['Close'].shift(1))))
             df['ATR'] = df['TR'].rolling(window=14).mean()
             
+            # Heikin-Ashi
             df['HA_Close'] = (df['Open'] + df['High'] + df['Low'] + df['Close']) / 4
             ha_o = [(df['Open'].iloc[0] + df['Close'].iloc[0]) / 2]
             for i in range(1, len(df)): ha_o.append((ha_o[i-1] + df['HA_Close'].iloc[i-1]) / 2)
@@ -213,6 +232,29 @@ with st.sidebar:
         else:
             st.info("Insufficient news data.")
 
+    with st.expander("💽 Data & Export Center"):
+        st.caption("Export raw market data for Excel/Python backtesting.")
+        export_df = fetch_chart_data(ticker, t_frame)
+        if not export_df.empty:
+            clean_df = export_df[['Open', 'High', 'Low', 'Close', 'Volume']] if 'Volume' in export_df.columns else export_df[['Open', 'High', 'Low', 'Close']]
+            csv_data = convert_df(clean_df)
+            st.download_button(label=f"📥 Download {ticker} Data", data=csv_data, file_name=f"{ticker}_{t_frame}_MarketData.csv", mime='text/csv', use_container_width=True)
+        
+        if len(st.session_state.active_trades) > 0:
+            ledger_df = pd.DataFrame(st.session_state.active_trades)
+            ledger_csv = ledger_df.to_csv(index=False).encode('utf-8')
+            st.download_button(label="🧾 Download My Trades", data=ledger_csv, file_name="Trade_Ledger.csv", mime='text/csv', use_container_width=True)
+
+    with st.expander("💳 Local Deposit Portal"):
+        st.radio("Network", ["MTN MoMo", "Airtel Money", "ZANACO App"])
+        st.text_input("Zambian Number")
+        st.button("Request USSD Push")
+        
+    # Restored Priority Support Expander!
+    with st.expander("🎧 Priority Support"):
+        st.text_area("Issue description...")
+        st.button("Open Ticket")
+
 # --- 7. MAIN DASHBOARD ---
 @st.fragment(run_every=2)
 def render_live_ticker():
@@ -229,6 +271,7 @@ with main_col:
     if not df.empty:
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25], specs=[[{"secondary_y": True}], [{"secondary_y": False}]])
         
+        # Plot Charts
         if chart_style == "Candlesticks":
             fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Price", increasing_line_color='#00ffbb', decreasing_line_color='#ff3355'), row=1, col=1, secondary_y=False)
         elif chart_style == "Heikin-Ashi":
@@ -238,17 +281,17 @@ with main_col:
         else:
             fig.add_trace(go.Scatter(x=df.index, y=df['Close'], line=dict(color='#00ffbb', width=2), name="Price"), row=1, col=1, secondary_y=False)
         
-        # 1. NEW: AI Price Projection
+        # AI Forecast
         if show_ai_pred and len(df) > 10:
             last_idx = df.index[-1]
             last_val = df['Close'].iloc[-1]
-            avg_move = df['Close'].diff().tail(10).mean() # simple linear momentum
+            avg_move = df['Close'].diff().tail(10).mean()
             delta = df.index[-1] - df.index[-2]
             future_idx = [last_idx + (delta * i) for i in range(1, 16)]
             future_vals = [last_val + (avg_move * i) for i in range(1, 16)]
             fig.add_trace(go.Scatter(x=[last_idx] + future_idx, y=[last_val] + future_vals, line=dict(color='#ff9900', width=2, dash='dot'), name="AI Forecast"), row=1, col=1)
 
-        # 2. NEW: Auto-Fibonacci Zones
+        # Auto-Fibonacci
         if show_fib:
             max_p, min_p = df['High'].max(), df['Low'].min()
             diff = max_p - min_p
@@ -256,6 +299,7 @@ with main_col:
                 val = max_p - (diff * lvl)
                 fig.add_hline(y=val, line_dash="dash", line_color=color, opacity=0.5, annotation_text=f"Fib {lvl}", annotation_position="top left", row=1, col=1)
 
+        # Overlays
         if show_sma:
             fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], line=dict(color='#ff9900', width=1.5), name="SMA 20"), row=1, col=1, secondary_y=False)
             
@@ -268,6 +312,7 @@ with main_col:
             fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=vol_colors, name="Volume"), row=1, col=1, secondary_y=True)
             fig.update_yaxes(range=[0, df['Volume'].max() * 4], showticklabels=False, showgrid=False, secondary_y=True, row=1, col=1)
         
+        # Lower Panel
         if bottom_osc == "MACD":
             fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name="Momentum", marker_color='rgba(200, 200, 200, 0.3)'), row=2, col=1)
             fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], line=dict(color='#00ffbb', width=1.2), name="MACD"), row=2, col=1)
@@ -287,13 +332,21 @@ with main_col:
             yaxis2=dict(side="right", autorange=True, fixedrange=False),
             showlegend=False, dragmode='pan', barmode='group'
         )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        
+        # Restored the Zoom Tools and Pro Configuration here!
+        pro_config = {
+            'displayModeBar': True, 
+            'scrollZoom': True, 
+            'displaylogo': False,
+            'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape']
+        }
+        st.plotly_chart(fig, use_container_width=True, config=pro_config)
     else:
         st.warning("Awaiting market data connection...")
 
 with side_col:
-    # 3. NEW: Added 'Social' tab for gamified leaderboard & copy trading
-    tab_pos, tab_soc, tab_ob, tab_news = st.tabs(["Positions", "Social", "L2 Data", "News"])
+    # ALL TABS RE-INTEGRATED
+    tab_pos, tab_soc, tab_grid, tab_ob, tab_news = st.tabs(["Positions", "Social", "Grid", "L2 Data", "News"])
 
     with tab_pos:
         @st.fragment(run_every=2)
@@ -317,7 +370,6 @@ with side_col:
         
     with tab_soc:
         st.markdown("<h4 style='color:#00ffbb;'>Top Traders (24h)</h4>", unsafe_allow_html=True)
-        # Fake leaderboard data to stimulate competition
         st.markdown("**1. Kapiri_King** | Win Rate: 82%")
         st.caption("Current Position: CALL on BTC")
         st.button("Auto-Copy 🤖", key="copy1", use_container_width=True)
@@ -327,6 +379,17 @@ with side_col:
         st.caption("Current Position: PUT on NVDA")
         st.button("Auto-Copy 🤖", key="copy2", use_container_width=True)
         st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
+
+    with tab_grid:
+        grid_tickers = st.multiselect("Select up to 2 assets:", list(FLAT_ASSETS.keys()), max_selections=2, label_visibility="collapsed")
+        if grid_tickers:
+            for asset_key in grid_tickers:
+                st.markdown(f"<div style='text-align: center; color: #00ffbb; font-weight: bold; font-size: 0.9rem;'>{asset_key}</div>", unsafe_allow_html=True)
+                gdf = fetch_chart_data(FLAT_ASSETS[asset_key], t_frame)
+                if not gdf.empty:
+                    gfig = go.Figure(data=[go.Candlestick(x=gdf.index, open=gdf['Open'], high=gdf['High'], low=gdf['Low'], close=gdf['Close'], increasing_line_color='#00ffbb', decreasing_line_color='#ff3355')])
+                    gfig.update_layout(template="plotly_dark", height=150, margin=dict(t=0, b=0, l=0, r=0), paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11", xaxis_rangeslider_visible=False, showlegend=False)
+                    st.plotly_chart(gfig, use_container_width=True, config={'displayModeBar': False})
 
     with tab_ob:
         @st.fragment(run_every=2)
