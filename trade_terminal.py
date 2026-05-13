@@ -81,7 +81,7 @@ if not st.session_state.acknowledged:
             st.rerun()
     st.stop()
 
-# --- 5. DATA ENGINES ---
+# --- 5. DATA ENGINES WITH HEIKIN-ASHI & ATR MATH ---
 @st.cache_data(ttl=60)
 def fetch_chart_data(symbol, tf):
     try:
@@ -91,6 +91,7 @@ def fetch_chart_data(symbol, tf):
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.droplevel(1)
         df = df.dropna()
         if not df.empty:
+            # Basic SMA and MACD
             df['SMA_20'] = df['Close'].rolling(window=20).mean()
             exp1 = df['Close'].ewm(span=12, adjust=False).mean()
             exp2 = df['Close'].ewm(span=26, adjust=False).mean()
@@ -98,19 +99,35 @@ def fetch_chart_data(symbol, tf):
             df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
             df['Hist'] = df['MACD'] - df['Signal']
             
-            # KVB
+            # 1. KVB (Kwacha Volatility Bands)
             df['KVB_Mid'] = df['Close'].rolling(window=20).mean()
             df['KVB_Std'] = df['Close'].rolling(window=20).std()
             df['KVB_Upper'] = df['KVB_Mid'] + (df['KVB_Std'] * 2.5)
             df['KVB_Lower'] = df['KVB_Mid'] - (df['KVB_Std'] * 2.5)
             
-            # ZEMO
+            # 2. ZEMO Oscillator
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
             rs = gain / loss
             rsi_raw = 100 - (100 / (1 + rs))
             df['ZEMO'] = rsi_raw.ewm(span=5, adjust=False).mean()
+            
+            # 3. ATR (Average True Range)
+            df['TR'] = np.maximum((df['High'] - df['Low']), 
+                                  np.maximum(abs(df['High'] - df['Close'].shift(1)), 
+                                             abs(df['Low'] - df['Close'].shift(1))))
+            df['ATR'] = df['TR'].rolling(window=14).mean()
+            
+            # 4. Heikin-Ashi Calculation
+            df['HA_Close'] = (df['Open'] + df['High'] + df['Low'] + df['Close']) / 4
+            ha_o = [(df['Open'].iloc[0] + df['Close'].iloc[0]) / 2]
+            for i in range(1, len(df)):
+                ha_o.append((ha_o[i-1] + df['HA_Close'].iloc[i-1]) / 2)
+            df['HA_Open'] = ha_o
+            df['HA_High'] = df[['High', 'HA_Open', 'HA_Close']].max(axis=1)
+            df['HA_Low'] = df[['Low', 'HA_Open', 'HA_Close']].min(axis=1)
+            
         return df
     except:
         return pd.DataFrame()
@@ -131,7 +148,7 @@ def fetch_live_news(symbol):
         news_data = ticker.news
         if not news_data: news_data = yf.Ticker("^GSPC").news
         formatted_news = []
-        for item in news_data[:10]: # Fetch more for better AI scanning
+        for item in news_data[:10]: 
             content = item.get("content", item)
             formatted_news.append({"title": content.get("title", "Market Update"), "link": content.get("clickThroughUrl", content.get("canonicalUrl", {})).get("url", "#"), "publisher": content.get("provider", {}).get("displayName", "Global Wire")})
         return formatted_news
@@ -154,14 +171,16 @@ base_price = fetch_live_price(ticker)
 
 with st.sidebar:
     st.markdown("<br>", unsafe_allow_html=True)
-    chart_style = st.radio("Chart Style", ["Candlesticks", "Line"], horizontal=True)
+    # Changed chart style to selectbox to handle the new options cleanly
+    chart_style = st.selectbox("Chart Style", ["Candlesticks", "Heikin-Ashi", "OHLC Bars", "Line"])
     
     c_vol, c_sma = st.columns(2)
     show_volume = c_vol.checkbox("Show Volume", value=True)
     show_sma = c_sma.checkbox("Show SMA 20")
     
     show_kvb = st.checkbox("Kwacha Volatility Bands (KVB)", value=True)
-    bottom_osc = st.radio("Lower Panel:", ["MACD", "ZEMO"], horizontal=True)
+    # Added ATR to the bottom panel options
+    bottom_osc = st.selectbox("Lower Panel:", ["MACD", "ZEMO", "ATR (Volatility Tracker)"])
     
     st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
     curr_bal = float(st.session_state.balance)
@@ -189,7 +208,6 @@ with st.sidebar:
 
     st.divider()
     
-    # NEW: AI SENTIMENT SCANNER
     with st.expander("🤖 AI Sentiment Scanner"):
         st.write(f"Scanning market headlines for **{asset_name}**...")
         news_pool = fetch_live_news(ticker)
@@ -197,7 +215,7 @@ with st.sidebar:
             pos_words = ['surge', 'jump', 'growth', 'bull', 'high', 'buy', 'up', 'soar', 'gain', 'profit', 'record', 'win']
             neg_words = ['drop', 'fall', 'bear', 'low', 'sell', 'down', 'crash', 'loss', 'plunge', 'risk', 'fail', 'lawsuit']
             
-            score = 50 # Start at neutral 50%
+            score = 50 
             for article in news_pool:
                 title_lower = article['title'].lower()
                 for pw in pos_words:
@@ -205,7 +223,7 @@ with st.sidebar:
                 for nw in neg_words:
                     if nw in title_lower: score -= 8
                     
-            score = max(0, min(100, score)) # Clamp between 0 and 100
+            score = max(0, min(100, score)) 
             
             if score >= 60:
                 sent_label = "🟢 BULLISH"
@@ -254,17 +272,21 @@ st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
 main_col, side_col = st.columns([2.5, 1])
 
 with main_col:
-    # 7A. SLOW LANE: Main Interactive Chart 
     df = fetch_chart_data(ticker, t_frame)
     if not df.empty:
-        # Added secondary_y=True to the first row to support the Volume Overlay
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25], specs=[[{"secondary_y": True}], [{"secondary_y": False}]])
         
+        # Plot Dynamic Chart Types
         if chart_style == "Candlesticks":
             fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Price", increasing_line_color='#00ffbb', decreasing_line_color='#ff3355'), row=1, col=1, secondary_y=False)
-        else:
+        elif chart_style == "Heikin-Ashi":
+            fig.add_trace(go.Candlestick(x=df.index, open=df['HA_Open'], high=df['HA_High'], low=df['HA_Low'], close=df['HA_Close'], name="Heikin-Ashi", increasing_line_color='#00ffbb', decreasing_line_color='#ff3355'), row=1, col=1, secondary_y=False)
+        elif chart_style == "OHLC Bars":
+            fig.add_trace(go.Ohlc(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="OHLC", increasing_line_color='#00ffbb', decreasing_line_color='#ff3355'), row=1, col=1, secondary_y=False)
+        else: # Line
             fig.add_trace(go.Scatter(x=df.index, y=df['Close'], line=dict(color='#00ffbb', width=2), name="Price"), row=1, col=1, secondary_y=False)
         
+        # Overlays
         if show_sma:
             fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], line=dict(color='#ff9900', width=1.5), name="SMA 20"), row=1, col=1, secondary_y=False)
             
@@ -272,23 +294,24 @@ with main_col:
             fig.add_trace(go.Scatter(x=df.index, y=df['KVB_Upper'], line=dict(color='rgba(255, 51, 85, 0.5)', width=1, dash='dot'), name="KVB Upper"), row=1, col=1, secondary_y=False)
             fig.add_trace(go.Scatter(x=df.index, y=df['KVB_Lower'], line=dict(color='rgba(0, 255, 187, 0.5)', width=1, dash='dot'), fill='tonexty', fillcolor='rgba(0, 255, 187, 0.05)', name="KVB Lower"), row=1, col=1, secondary_y=False)
             
-        # NEW: VOLUME OVERLAY
         if show_volume and 'Volume' in df.columns:
             vol_colors = ['rgba(0, 255, 187, 0.4)' if row['Close'] >= row['Open'] else 'rgba(255, 51, 85, 0.4)' for index, row in df.iterrows()]
             fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=vol_colors, name="Volume"), row=1, col=1, secondary_y=True)
-            # Make sure the volume stays at the bottom quarter of the main chart
             max_vol = df['Volume'].max()
             fig.update_yaxes(range=[0, max_vol * 4], showticklabels=False, showgrid=False, secondary_y=True, row=1, col=1)
         
+        # Dynamic Lower Panel
         if bottom_osc == "MACD":
             fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name="Momentum", marker_color='rgba(200, 200, 200, 0.3)'), row=2, col=1)
             fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], line=dict(color='#00ffbb', width=1.2), name="MACD"), row=2, col=1)
             fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], line=dict(color='#ff3355', width=1.2), name="Signal"), row=2, col=1)
-        else:
+        elif bottom_osc == "ZEMO":
             fig.add_trace(go.Scatter(x=df.index, y=df['ZEMO'], line=dict(color='#00ffbb', width=2), name="ZEMO"), row=2, col=1)
             fig.add_hline(y=80, line_dash="dot", line_color="#ff3355", row=2, col=1)
             fig.add_hline(y=20, line_dash="dot", line_color="#00ffbb", row=2, col=1)
             fig.update_yaxes(range=[0, 100], row=2, col=1)
+        elif bottom_osc == "ATR (Volatility Tracker)":
+            fig.add_trace(go.Scatter(x=df.index, y=df['ATR'], line=dict(color='#ff9900', width=2), name="ATR"), row=2, col=1)
 
         fig.update_layout(
             template="plotly_dark", xaxis_rangeslider_visible=False, height=500, 
@@ -358,7 +381,7 @@ with side_col:
     with tab_news:
         live_news = fetch_live_news(ticker)
         if live_news:
-            for article in live_news[:4]: # Show top 4 in the tight tab
+            for article in live_news[:4]:
                 st.markdown(f"[{article['title']}]({article['link']})")
                 st.caption(f"{article['publisher']}")
                 st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
