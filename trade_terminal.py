@@ -190,6 +190,7 @@ with st.sidebar:
 main_col, side_col = st.columns([3, 1])
 
 with main_col:
+    # 7A. FAST LANE: Live Ticker
     @st.fragment(run_every=2)
     def render_live_ticker():
         live_p = fetch_live_price(ticker) * (1 + np.random.uniform(-0.0001, 0.0001))
@@ -197,34 +198,7 @@ with main_col:
     
     render_live_ticker()
 
-    df = fetch_chart_data(ticker, t_frame)
-    if not df.empty:
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
-        
-        if chart_style == "Candlesticks (Pro)":
-            fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Price", increasing_line_color='#00ffbb', decreasing_line_color='#ff3355'), row=1, col=1)
-        else:
-            fig.add_trace(go.Scatter(x=df.index, y=df['Close'], line=dict(color='#00ffbb', width=2), name="Price"), row=1, col=1)
-        
-        if show_sma:
-            fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], line=dict(color='#ff9900', width=1.5), name="SMA 20"), row=1, col=1)
-        
-        fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name="Momentum", marker_color='rgba(200, 200, 200, 0.3)'), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], line=dict(color='#00ffbb', width=1.2), name="MACD"), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], line=dict(color='#ff3355', width=1.2), name="Signal"), row=2, col=1)
-
-        fig.update_layout(
-            template="plotly_dark", xaxis_rangeslider_visible=False, height=550, 
-            paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11", margin=dict(t=10, b=10, l=0, r=0),
-            yaxis=dict(side="right", autorange=True, fixedrange=False), 
-            yaxis2=dict(side="right", autorange=True, fixedrange=False),
-            showlegend=False, dragmode='pan' 
-        )
-        pro_config = {'displayModeBar': True, 'scrollZoom': True, 'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape']}
-        st.plotly_chart(fig, use_container_width=True, config=pro_config)
-    else:
-        st.warning("Awaiting market data connection...")
-
+    # 7B. FAST LANE: Active Trades (MOVED TO TOP FOR MOBILE UX)
     @st.fragment(run_every=2)
     def render_active_trades():
         st.divider()
@@ -258,6 +232,7 @@ with main_col:
     render_active_trades()
 
 with side_col:
+    # 7C. FAST LANE: Order Book & Gauge
     @st.fragment(run_every=2)
     def render_side_metrics():
         sentiment = np.random.randint(45, 75)
@@ -286,14 +261,47 @@ with side_col:
     st.caption("🥇 **Kapiri_King** (+120%)")
     st.caption("🥈 **Lsk_Bull** (+85%)")
 
-    st.divider()
-    st.subheader("📰 Live Market News")
-    live_news = fetch_live_news(ticker)
-    if live_news:
-        for article in live_news:
-            st.markdown(f"**[{article['title']}]({article['link']})**")
-            st.caption(f"Source: {article['publisher']}")
-            st.write("---")
+# --- 8. FULL WIDTH PANORAMIC SECTIONS ---
+
+# 8A. SLOW LANE: Solid Interactive Chart (MOVED BELOW EVERYTHING FOR PERFECT MOBILE SCROLLING)
+st.divider()
+df = fetch_chart_data(ticker, t_frame)
+if not df.empty:
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
+    
+    if chart_style == "Candlesticks (Pro)":
+        fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Price", increasing_line_color='#00ffbb', decreasing_line_color='#ff3355'), row=1, col=1)
     else:
-        st.warning("🇿🇲 **09:00** - [Bank of Zambia Rate Decision](https://www.boz.zm/)")
-        st.info("🇺🇸 **14:30** - [Fed Inflation Data Released](https://www.federalreserve.gov/)")
+        fig.add_trace(go.Scatter(x=df.index, y=df['Close'], line=dict(color='#00ffbb', width=2), name="Price"), row=1, col=1)
+    
+    if show_sma:
+        fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], line=dict(color='#ff9900', width=1.5), name="SMA 20"), row=1, col=1)
+    
+    fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name="Momentum", marker_color='rgba(200, 200, 200, 0.3)'), row=2, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], line=dict(color='#00ffbb', width=1.2), name="MACD"), row=2, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], line=dict(color='#ff3355', width=1.2), name="Signal"), row=2, col=1)
+
+    fig.update_layout(
+        template="plotly_dark", xaxis_rangeslider_visible=False, height=650, 
+        paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11", margin=dict(t=10, b=10, l=0, r=0),
+        yaxis=dict(side="right", autorange=True, fixedrange=False), 
+        yaxis2=dict(side="right", autorange=True, fixedrange=False),
+        showlegend=False, dragmode='pan' 
+    )
+    pro_config = {'displayModeBar': True, 'scrollZoom': True, 'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape']}
+    st.plotly_chart(fig, use_container_width=True, config=pro_config)
+else:
+    st.warning("Awaiting market data connection...")
+
+# 8B. SLOW LANE: News Feed
+st.divider()
+st.subheader("📰 Live Market News")
+live_news = fetch_live_news(ticker)
+if live_news:
+    for article in live_news:
+        st.markdown(f"**[{article['title']}]({article['link']})**")
+        st.caption(f"Source: {article['publisher']}")
+        st.write("---")
+else:
+    st.warning("🇿🇲 **09:00** - [Bank of Zambia Rate Decision](https://www.boz.zm/)")
+    st.info("🇺🇸 **14:30** - [Fed Inflation Data Released](https://www.federalreserve.gov/)")
