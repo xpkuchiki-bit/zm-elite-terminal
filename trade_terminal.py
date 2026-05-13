@@ -26,8 +26,11 @@ st.markdown("""
     .stApp { background-color: #0b0e11; color: white; }
     .block-container { padding-top: 3rem !important; padding-bottom: 0rem !important; max-width: 100% !important; }
     
-    /* ONLY hide the Deploy button. We are no longer touching the header or toolbar! */
+    /* 🔥 SURGICAL STRIKE: Hide Deploy & GitHub without touching the header layout 🔥 */
     .stAppDeployButton { display: none !important; }
+    [data-testid="stToolbar"] { display: none !important; }
+    a[href*="github.com"] { display: none !important; } /* Erases the GitHub icon link specifically */
+    .viewerBadge_container__1QSob { display: none !important; } /* Erases Streamlit Cloud viewer badge */
     
     /* 🔥 THE ARROW LIFESAVER: Forces the toggle button to stay visible and on top 🔥 */
     [data-testid="collapsedControl"] { 
@@ -250,7 +253,6 @@ with st.sidebar:
         st.text_input("Zambian Number")
         st.button("Request USSD Push")
         
-    # Restored Priority Support Expander!
     with st.expander("🎧 Priority Support"):
         st.text_area("Issue description...")
         st.button("Open Ticket")
@@ -333,7 +335,6 @@ with main_col:
             showlegend=False, dragmode='pan', barmode='group'
         )
         
-        # Restored the Zoom Tools and Pro Configuration here!
         pro_config = {
             'displayModeBar': True, 
             'scrollZoom': True, 
