@@ -1,6 +1,5 @@
 import os
 import sys
-# Critical for Anaconda/Windows environment stability
 os.environ['NUMBA_SKIP_REQUIREMENTS_CHECK'] = '1'
 
 import streamlit as st
@@ -22,27 +21,21 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    /* Compress the app padding for Zero-Scroll, leaving exactly 3rem at the top so the arrow isn't squished! */
     .stApp { background-color: #0b0e11; color: white; }
     .block-container { padding-top: 3rem !important; padding-bottom: 0rem !important; max-width: 100% !important; }
-    
-    /* ONLY hide the Deploy button. We are no longer touching the header or toolbar! */
     .stAppDeployButton { display: none !important; }
     
     div[data-testid="stMetricValue"] { font-size: 1.5rem; color: #00ffbb; }
     .stProgress > div > div > div > div { background-color: #00ffbb; }
     
-    /* Custom Green and Red Call/Put Buttons */
     div[data-testid="stSidebar"] div[data-testid="column"]:nth-of-type(1) button { background-color: #00ffbb !important; color: black !important; font-weight: bold; border: none; }
     div[data-testid="stSidebar"] div[data-testid="column"]:nth-of-type(2) button { background-color: #ff3355 !important; color: white !important; font-weight: bold; border: none; }
     
-    /* Order Book & Ticker Styling */
     .order-book-row { display: flex; justify-content: space-between; font-family: monospace; font-size: 0.85rem; padding: 2px 0; }
     .bid { color: #00ffbb; }
     .ask { color: #ff3355; }
     .live-ticker { font-size: 1.8rem; font-weight: bold; color: #00ffbb; font-family: monospace; margin-bottom: -15px; margin-top: -10px;}
     
-    /* Sleek Tab Styling */
     .stTabs [data-baseweb="tab-list"] { background-color: transparent; }
     .stTabs [data-baseweb="tab"] { color: #a1a5b0; font-weight: bold; }
     .stTabs [aria-selected="true"] { color: #00ffbb !important; }
@@ -81,7 +74,7 @@ if not st.session_state.acknowledged:
             st.rerun()
     st.stop()
 
-# --- 5. DATA ENGINES WITH HEIKIN-ASHI & ATR MATH ---
+# --- 5. DATA ENGINES ---
 @st.cache_data(ttl=60)
 def fetch_chart_data(symbol, tf):
     try:
@@ -91,7 +84,6 @@ def fetch_chart_data(symbol, tf):
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.droplevel(1)
         df = df.dropna()
         if not df.empty:
-            # Basic SMA and MACD
             df['SMA_20'] = df['Close'].rolling(window=20).mean()
             exp1 = df['Close'].ewm(span=12, adjust=False).mean()
             exp2 = df['Close'].ewm(span=26, adjust=False).mean()
@@ -99,13 +91,11 @@ def fetch_chart_data(symbol, tf):
             df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
             df['Hist'] = df['MACD'] - df['Signal']
             
-            # 1. KVB (Kwacha Volatility Bands)
             df['KVB_Mid'] = df['Close'].rolling(window=20).mean()
             df['KVB_Std'] = df['Close'].rolling(window=20).std()
             df['KVB_Upper'] = df['KVB_Mid'] + (df['KVB_Std'] * 2.5)
             df['KVB_Lower'] = df['KVB_Mid'] - (df['KVB_Std'] * 2.5)
             
-            # 2. ZEMO Oscillator
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -113,21 +103,15 @@ def fetch_chart_data(symbol, tf):
             rsi_raw = 100 - (100 / (1 + rs))
             df['ZEMO'] = rsi_raw.ewm(span=5, adjust=False).mean()
             
-            # 3. ATR (Average True Range)
-            df['TR'] = np.maximum((df['High'] - df['Low']), 
-                                  np.maximum(abs(df['High'] - df['Close'].shift(1)), 
-                                             abs(df['Low'] - df['Close'].shift(1))))
+            df['TR'] = np.maximum((df['High'] - df['Low']), np.maximum(abs(df['High'] - df['Close'].shift(1)), abs(df['Low'] - df['Close'].shift(1))))
             df['ATR'] = df['TR'].rolling(window=14).mean()
             
-            # 4. Heikin-Ashi Calculation
             df['HA_Close'] = (df['Open'] + df['High'] + df['Low'] + df['Close']) / 4
             ha_o = [(df['Open'].iloc[0] + df['Close'].iloc[0]) / 2]
-            for i in range(1, len(df)):
-                ha_o.append((ha_o[i-1] + df['HA_Close'].iloc[i-1]) / 2)
+            for i in range(1, len(df)): ha_o.append((ha_o[i-1] + df['HA_Close'].iloc[i-1]) / 2)
             df['HA_Open'] = ha_o
             df['HA_High'] = df[['High', 'HA_Open', 'HA_Close']].max(axis=1)
             df['HA_Low'] = df[['Low', 'HA_Open', 'HA_Close']].min(axis=1)
-            
         return df
     except:
         return pd.DataFrame()
@@ -171,16 +155,19 @@ base_price = fetch_live_price(ticker)
 
 with st.sidebar:
     st.markdown("<br>", unsafe_allow_html=True)
-    # Changed chart style to selectbox to handle the new options cleanly
     chart_style = st.selectbox("Chart Style", ["Candlesticks", "Heikin-Ashi", "OHLC Bars", "Line"])
     
+    # Chart Toggles
     c_vol, c_sma = st.columns(2)
-    show_volume = c_vol.checkbox("Show Volume", value=True)
-    show_sma = c_sma.checkbox("Show SMA 20")
+    show_volume = c_vol.checkbox("Show Volume", value=False)
+    show_sma = c_sma.checkbox("Show SMA 20", value=False)
     
-    show_kvb = st.checkbox("Kwacha Volatility Bands (KVB)", value=True)
-    # Added ATR to the bottom panel options
-    bottom_osc = st.selectbox("Lower Panel:", ["MACD", "ZEMO", "ATR (Volatility Tracker)"])
+    c_fib, c_pred = st.columns(2)
+    show_fib = c_fib.checkbox("Auto-Fibonacci", value=False)
+    show_ai_pred = c_pred.checkbox("AI Projection", value=True)
+    
+    show_kvb = st.checkbox("Kwacha Volatility Bands (KVB)", value=False)
+    bottom_osc = st.selectbox("Lower Panel:", ["MACD", "ZEMO", "ATR (Volatility)"])
     
     st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
     curr_bal = float(st.session_state.balance)
@@ -207,60 +194,26 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
-    
     with st.expander("🤖 AI Sentiment Scanner"):
-        st.write(f"Scanning market headlines for **{asset_name}**...")
         news_pool = fetch_live_news(ticker)
         if news_pool:
-            pos_words = ['surge', 'jump', 'growth', 'bull', 'high', 'buy', 'up', 'soar', 'gain', 'profit', 'record', 'win']
-            neg_words = ['drop', 'fall', 'bear', 'low', 'sell', 'down', 'crash', 'loss', 'plunge', 'risk', 'fail', 'lawsuit']
-            
             score = 50 
             for article in news_pool:
                 title_lower = article['title'].lower()
-                for pw in pos_words:
+                for pw in ['surge', 'jump', 'bull', 'high', 'buy', 'up', 'soar', 'win']:
                     if pw in title_lower: score += 8
-                for nw in neg_words:
+                for nw in ['drop', 'fall', 'bear', 'low', 'sell', 'down', 'crash', 'risk']:
                     if nw in title_lower: score -= 8
-                    
             score = max(0, min(100, score)) 
-            
-            if score >= 60:
-                sent_label = "🟢 BULLISH"
-                sent_color = "#00ffbb"
-            elif score <= 40:
-                sent_label = "🔴 BEARISH"
-                sent_color = "#ff3355"
-            else:
-                sent_label = "⚪ NEUTRAL"
-                sent_color = "#a1a5b0"
-                
+            sent_label = "🟢 BULLISH" if score >= 60 else "🔴 BEARISH" if score <= 40 else "⚪ NEUTRAL"
+            sent_color = "#00ffbb" if score >= 60 else "#ff3355" if score <= 40 else "#a1a5b0"
             st.markdown(f"<h3 style='text-align: center; color: {sent_color};'>{score}%</h3>", unsafe_allow_html=True)
             st.markdown(f"<div style='text-align: center; font-weight: bold; color: {sent_color};'>{sent_label}</div>", unsafe_allow_html=True)
             st.progress(score / 100.0)
-            st.caption(f"Algorithm confidence based on {len(news_pool)} recent news catalysts.")
         else:
-            st.info("Insufficient news data to generate AI score.")
+            st.info("Insufficient news data.")
 
-    with st.expander("💽 Data & Export Center"):
-        st.caption("Export raw market data for Excel/Python backtesting.")
-        export_df = fetch_chart_data(ticker, t_frame)
-        if not export_df.empty:
-            clean_df = export_df[['Open', 'High', 'Low', 'Close', 'Volume']] if 'Volume' in export_df.columns else export_df[['Open', 'High', 'Low', 'Close']]
-            csv_data = convert_df(clean_df)
-            st.download_button(label=f"📥 Download {ticker} Data", data=csv_data, file_name=f"{ticker}_{t_frame}_MarketData.csv", mime='text/csv', use_container_width=True)
-        
-        if len(st.session_state.active_trades) > 0:
-            ledger_df = pd.DataFrame(st.session_state.active_trades)
-            ledger_csv = ledger_df.to_csv(index=False).encode('utf-8')
-            st.download_button(label="🧾 Download My Trades", data=ledger_csv, file_name="Trade_Ledger.csv", mime='text/csv', use_container_width=True)
-
-    with st.expander("💳 Local Deposit Portal"):
-        st.radio("Network", ["MTN MoMo", "Airtel Money", "ZANACO App"])
-        st.text_input("Zambian Number")
-        st.button("Request USSD Push")
-
-# --- 7. MAIN ZERO-SCROLL DASHBOARD ---
+# --- 7. MAIN DASHBOARD ---
 @st.fragment(run_every=2)
 def render_live_ticker():
     live_p = fetch_live_price(ticker) * (1 + np.random.uniform(-0.0001, 0.0001))
@@ -276,17 +229,33 @@ with main_col:
     if not df.empty:
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25], specs=[[{"secondary_y": True}], [{"secondary_y": False}]])
         
-        # Plot Dynamic Chart Types
         if chart_style == "Candlesticks":
             fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Price", increasing_line_color='#00ffbb', decreasing_line_color='#ff3355'), row=1, col=1, secondary_y=False)
         elif chart_style == "Heikin-Ashi":
-            fig.add_trace(go.Candlestick(x=df.index, open=df['HA_Open'], high=df['HA_High'], low=df['HA_Low'], close=df['HA_Close'], name="Heikin-Ashi", increasing_line_color='#00ffbb', decreasing_line_color='#ff3355'), row=1, col=1, secondary_y=False)
+            fig.add_trace(go.Candlestick(x=df.index, open=df['HA_Open'], high=df['HA_High'], low=df['HA_Low'], close=df['HA_Close'], name="Price", increasing_line_color='#00ffbb', decreasing_line_color='#ff3355'), row=1, col=1, secondary_y=False)
         elif chart_style == "OHLC Bars":
-            fig.add_trace(go.Ohlc(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="OHLC", increasing_line_color='#00ffbb', decreasing_line_color='#ff3355'), row=1, col=1, secondary_y=False)
-        else: # Line
+            fig.add_trace(go.Ohlc(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Price", increasing_line_color='#00ffbb', decreasing_line_color='#ff3355'), row=1, col=1, secondary_y=False)
+        else:
             fig.add_trace(go.Scatter(x=df.index, y=df['Close'], line=dict(color='#00ffbb', width=2), name="Price"), row=1, col=1, secondary_y=False)
         
-        # Overlays
+        # 1. NEW: AI Price Projection
+        if show_ai_pred and len(df) > 10:
+            last_idx = df.index[-1]
+            last_val = df['Close'].iloc[-1]
+            avg_move = df['Close'].diff().tail(10).mean() # simple linear momentum
+            delta = df.index[-1] - df.index[-2]
+            future_idx = [last_idx + (delta * i) for i in range(1, 16)]
+            future_vals = [last_val + (avg_move * i) for i in range(1, 16)]
+            fig.add_trace(go.Scatter(x=[last_idx] + future_idx, y=[last_val] + future_vals, line=dict(color='#ff9900', width=2, dash='dot'), name="AI Forecast"), row=1, col=1)
+
+        # 2. NEW: Auto-Fibonacci Zones
+        if show_fib:
+            max_p, min_p = df['High'].max(), df['Low'].min()
+            diff = max_p - min_p
+            for lvl, color in zip([0.236, 0.382, 0.5, 0.618], ['#33ff33', '#ffff33', '#ff9933', '#ff3333']):
+                val = max_p - (diff * lvl)
+                fig.add_hline(y=val, line_dash="dash", line_color=color, opacity=0.5, annotation_text=f"Fib {lvl}", annotation_position="top left", row=1, col=1)
+
         if show_sma:
             fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], line=dict(color='#ff9900', width=1.5), name="SMA 20"), row=1, col=1, secondary_y=False)
             
@@ -297,10 +266,8 @@ with main_col:
         if show_volume and 'Volume' in df.columns:
             vol_colors = ['rgba(0, 255, 187, 0.4)' if row['Close'] >= row['Open'] else 'rgba(255, 51, 85, 0.4)' for index, row in df.iterrows()]
             fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=vol_colors, name="Volume"), row=1, col=1, secondary_y=True)
-            max_vol = df['Volume'].max()
-            fig.update_yaxes(range=[0, max_vol * 4], showticklabels=False, showgrid=False, secondary_y=True, row=1, col=1)
+            fig.update_yaxes(range=[0, df['Volume'].max() * 4], showticklabels=False, showgrid=False, secondary_y=True, row=1, col=1)
         
-        # Dynamic Lower Panel
         if bottom_osc == "MACD":
             fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name="Momentum", marker_color='rgba(200, 200, 200, 0.3)'), row=2, col=1)
             fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], line=dict(color='#00ffbb', width=1.2), name="MACD"), row=2, col=1)
@@ -310,7 +277,7 @@ with main_col:
             fig.add_hline(y=80, line_dash="dot", line_color="#ff3355", row=2, col=1)
             fig.add_hline(y=20, line_dash="dot", line_color="#00ffbb", row=2, col=1)
             fig.update_yaxes(range=[0, 100], row=2, col=1)
-        elif bottom_osc == "ATR (Volatility Tracker)":
+        elif bottom_osc == "ATR (Volatility)":
             fig.add_trace(go.Scatter(x=df.index, y=df['ATR'], line=dict(color='#ff9900', width=2), name="ATR"), row=2, col=1)
 
         fig.update_layout(
@@ -325,27 +292,8 @@ with main_col:
         st.warning("Awaiting market data connection...")
 
 with side_col:
-    # ALL SECONDARY FEATURES PACKED INTO TABS
-    tab_ob, tab_pos, tab_grid, tab_news = st.tabs(["Order Book", "Positions", "Grid", "News"])
-    
-    with tab_ob:
-        @st.fragment(run_every=2)
-        def render_order_book():
-            sentiment = np.random.randint(45, 75)
-            st.progress(int(sentiment))
-            st.caption(f"Buyers: {sentiment}% | Sellers: {100-sentiment}%")
-            
-            cp = fetch_live_price(ticker)
-            if cp > 0:
-                cp = cp * (1 + np.random.uniform(-0.0001, 0.0001))
-                st.markdown(f"<div class='order-book-row ask'><span>{cp * 1.0003:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='order-book-row ask'><span>{cp * 1.0002:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='order-book-row ask'><span>{cp * 1.0001:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='text-align:center; font-weight:bold; margin: 10px 0; color:#fff;'>Spread: 0.0001</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='order-book-row bid'><span>{cp * 0.9999:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='order-book-row bid'><span>{cp * 0.9998:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='order-book-row bid'><span>{cp * 0.9997:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
-        render_order_book()
+    # 3. NEW: Added 'Social' tab for gamified leaderboard & copy trading
+    tab_pos, tab_soc, tab_ob, tab_news = st.tabs(["Positions", "Social", "L2 Data", "News"])
 
     with tab_pos:
         @st.fragment(run_every=2)
@@ -366,17 +314,38 @@ with side_col:
                         st.rerun() 
                     st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
         render_positions()
+        
+    with tab_soc:
+        st.markdown("<h4 style='color:#00ffbb;'>Top Traders (24h)</h4>", unsafe_allow_html=True)
+        # Fake leaderboard data to stimulate competition
+        st.markdown("**1. Kapiri_King** | Win Rate: 82%")
+        st.caption("Current Position: CALL on BTC")
+        st.button("Auto-Copy 🤖", key="copy1", use_container_width=True)
+        st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
+        
+        st.markdown("**2. Lsk_Bull** | Win Rate: 76%")
+        st.caption("Current Position: PUT on NVDA")
+        st.button("Auto-Copy 🤖", key="copy2", use_container_width=True)
+        st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
 
-    with tab_grid:
-        grid_tickers = st.multiselect("Select up to 2 assets:", list(FLAT_ASSETS.keys()), max_selections=2, label_visibility="collapsed")
-        if grid_tickers:
-            for asset_key in grid_tickers:
-                st.markdown(f"<div style='text-align: center; color: #00ffbb; font-weight: bold; font-size: 0.9rem;'>{asset_key}</div>", unsafe_allow_html=True)
-                gdf = fetch_chart_data(FLAT_ASSETS[asset_key], t_frame)
-                if not gdf.empty:
-                    gfig = go.Figure(data=[go.Candlestick(x=gdf.index, open=gdf['Open'], high=gdf['High'], low=gdf['Low'], close=gdf['Close'], increasing_line_color='#00ffbb', decreasing_line_color='#ff3355')])
-                    gfig.update_layout(template="plotly_dark", height=150, margin=dict(t=0, b=0, l=0, r=0), paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11", xaxis_rangeslider_visible=False, showlegend=False)
-                    st.plotly_chart(gfig, use_container_width=True, config={'displayModeBar': False})
+    with tab_ob:
+        @st.fragment(run_every=2)
+        def render_order_book():
+            sentiment = np.random.randint(45, 75)
+            st.progress(int(sentiment))
+            st.caption(f"Buyers: {sentiment}% | Sellers: {100-sentiment}%")
+            
+            cp = fetch_live_price(ticker)
+            if cp > 0:
+                cp = cp * (1 + np.random.uniform(-0.0001, 0.0001))
+                st.markdown(f"<div class='order-book-row ask'><span>{cp * 1.0003:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='order-book-row ask'><span>{cp * 1.0002:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='order-book-row ask'><span>{cp * 1.0001:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align:center; font-weight:bold; margin: 10px 0; color:#fff;'>Spread: 0.0001</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='order-book-row bid'><span>{cp * 0.9999:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='order-book-row bid'><span>{cp * 0.9998:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='order-book-row bid'><span>{cp * 0.9997:.4f}</span><span>{np.random.randint(10, 500)}</span></div>", unsafe_allow_html=True)
+        render_order_book()
 
     with tab_news:
         live_news = fetch_live_news(ticker)
