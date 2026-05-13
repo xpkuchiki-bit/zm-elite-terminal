@@ -22,17 +22,15 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    /* Compress the app padding for Zero-Scroll, leaving exactly 3.5rem at the top for the arrow */
+    /* Compress the app padding for Zero-Scroll, leaving exactly 3rem at the top so the arrow isn't squished! */
     .stApp { background-color: #0b0e11; color: white; }
-    .block-container { padding-top: 3.5rem !important; padding-bottom: 0rem !important; max-width: 100% !important; }
+    .block-container { padding-top: 3rem !important; padding-bottom: 0rem !important; max-width: 100% !important; }
     
-    /* 🔥 THE BULLETPROOF HIDE: Use 'visibility: hidden' so the structural flexbox doesn't collapse 🔥 */
-    [data-testid="stToolbar"] { visibility: hidden !important; }
+    /* ONLY hide the Deploy button. We are no longer touching the header or toolbar! */
     .stAppDeployButton { display: none !important; }
-    header { background: transparent !important; }
     
-    /* 🔥 THE ARROW LIFESAVER: Targets all known Streamlit IDs to force the arrow to stay visible 🔥 */
-    [data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"] { 
+    /* 🔥 THE ARROW LIFESAVER: Forces the toggle button to stay visible and on top 🔥 */
+    [data-testid="collapsedControl"] { 
         display: flex !important; 
         visibility: visible !important; 
         color: #00ffbb !important; 
@@ -252,6 +250,7 @@ with st.sidebar:
         st.text_input("Zambian Number")
         st.button("Request USSD Push")
         
+    # Restored Priority Support Expander!
     with st.expander("🎧 Priority Support"):
         st.text_area("Issue description...")
         st.button("Open Ticket")
@@ -334,6 +333,7 @@ with main_col:
             showlegend=False, dragmode='pan', barmode='group'
         )
         
+        # Restored the Zoom Tools and Pro Configuration here!
         pro_config = {
             'displayModeBar': True, 
             'scrollZoom': True, 
