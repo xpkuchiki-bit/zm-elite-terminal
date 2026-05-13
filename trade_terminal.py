@@ -45,7 +45,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. THE COMPLETE, UNTRUNCATED ASSET DICTIONARY ---
+# --- 2. THE COMPLETE ASSET DICTIONARY ---
 ASSETS = {
     "Crypto": {
         "Bitcoin (BTC)": "BTC-USD", "Ethereum (ETH)": "ETH-USD", "Solana (SOL)": "SOL-USD", 
@@ -91,7 +91,7 @@ if not st.session_state.acknowledged:
             
     st.stop()
 
-# --- 5. DATA ENGINES (Decoupled Fast/Slow Lanes) ---
+# --- 5. DATA ENGINES ---
 @st.cache_data(ttl=60)
 def fetch_chart_data(symbol, tf):
     try:
@@ -191,7 +191,7 @@ with st.sidebar:
 main_col, side_col = st.columns([3, 1])
 
 with main_col:
-    # 7A. FAST LANE: Live Ticker
+    # Live Ticker
     @st.fragment(run_every=2)
     def render_live_ticker():
         live_p = fetch_live_price(ticker) * (1 + np.random.uniform(-0.0001, 0.0001))
@@ -199,7 +199,7 @@ with main_col:
     
     render_live_ticker()
 
-    # 7B. FAST LANE: Active Trades (TOP FOR MOBILE UX)
+    # Active Trades (Top for Mobile UX)
     @st.fragment(run_every=2)
     def render_active_trades():
         st.divider()
@@ -233,7 +233,7 @@ with main_col:
     render_active_trades()
 
 with side_col:
-    # 7C. FAST LANE: Order Book & Gauge
+    # Order Book & Gauge
     @st.fragment(run_every=2)
     def render_side_metrics():
         sentiment = np.random.randint(45, 75)
@@ -263,8 +263,6 @@ with side_col:
     st.caption("🥈 **Lsk_Bull** (+85%)")
 
 # --- 8. FULL WIDTH PANORAMIC SECTIONS ---
-
-# 8A. SLOW LANE: Solid Interactive Chart 
 st.divider()
 df = fetch_chart_data(ticker, t_frame)
 if not df.empty:
@@ -290,4 +288,18 @@ if not df.empty:
         showlegend=False, dragmode='pan' 
     )
     pro_config = {'displayModeBar': True, 'scrollZoom': True, 'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape']}
-    st
+    st.plotly_chart(fig, use_container_width=True, config=pro_config)
+else:
+    st.warning("Awaiting market data connection...")
+
+st.divider()
+st.subheader("📰 Live Market News")
+live_news = fetch_live_news(ticker)
+if live_news:
+    for article in live_news:
+        st.markdown(f"**[{article['title']}]({article['link']})**")
+        st.caption(f"Source: {article['publisher']}")
+        st.write("---")
+else:
+    st.warning("🇿🇲 **09:00** - [Bank of Zambia Rate Decision](https://www.boz.zm/)")
+    st.info("🇺🇸 **14:30** - [Fed Inflation Data Released](https://www.federalreserve.gov/)")
