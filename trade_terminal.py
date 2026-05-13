@@ -12,7 +12,6 @@ import numpy as np
 import time
 
 # --- 1. PRO UI CONFIGURATION ---
-# Native way to clear out the three-dot menu for users, protecting the sidebar arrow!
 st.set_page_config(
     layout="wide", 
     page_title="ZM Elite Terminal", 
@@ -69,7 +68,6 @@ ASSETS = {
     }
 }
 
-# Create a flat dictionary of all assets for the new Grid View
 FLAT_ASSETS = {name: ticker for category, assets in ASSETS.items() for name, ticker in assets.items()}
 
 # --- 3. SESSION STATE ---
@@ -96,7 +94,7 @@ if not st.session_state.acknowledged:
             
     st.stop()
 
-# --- 5. DATA ENGINES ---
+# --- 5. DATA ENGINES WITH CUSTOM MATH ---
 @st.cache_data(ttl=60)
 def fetch_chart_data(symbol, tf):
     try:
@@ -106,12 +104,28 @@ def fetch_chart_data(symbol, tf):
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.droplevel(1)
         df = df.dropna()
         if not df.empty:
+            # Standard Indicators
             df['SMA_20'] = df['Close'].rolling(window=20).mean()
             exp1 = df['Close'].ewm(span=12, adjust=False).mean()
             exp2 = df['Close'].ewm(span=26, adjust=False).mean()
             df['MACD'] = exp1 - exp2
             df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
             df['Hist'] = df['MACD'] - df['Signal']
+            
+            # --- PROPRIETARY INDICATOR 1: Kwacha Volatility Bands (KVB) ---
+            df['KVB_Mid'] = df['Close'].rolling(window=20).mean()
+            df['KVB_Std'] = df['Close'].rolling(window=20).std()
+            df['KVB_Upper'] = df['KVB_Mid'] + (df['KVB_Std'] * 2.5) # 2.5 Multiplier for EM spread shocks
+            df['KVB_Lower'] = df['KVB_Mid'] - (df['KVB_Std'] * 2.5)
+            
+            # --- PROPRIETARY INDICATOR 2: ZEMO (Zambian Elite Momentum Oscillator) ---
+            delta = df['Close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            rsi_raw = 100 - (100 / (1 + rs))
+            df['ZEMO'] = rsi_raw.ewm(span=5, adjust=False).mean() # Smoothed to prevent 1m fakeouts
+            
         return df
     except:
         return pd.DataFrame()
@@ -154,8 +168,14 @@ base_price = fetch_live_price(ticker)
 
 with st.sidebar:
     st.divider()
-    chart_style = st.radio("View Mode", ["Candlesticks (Pro)", "Line (Simple)"])
-    show_sma = st.checkbox("Show SMA 20 Trendline", value=True)
+    chart_style = st.radio("Chart Type", ["Candlesticks", "Line"])
+    show_sma = st.checkbox("Show SMA 20", value=False)
+    
+    # NEW PROPRIETARY TOGGLES
+    st.divider()
+    st.subheader("🇿🇲 Elite Indicators")
+    show_kvb = st.checkbox("Kwacha Volatility Bands (KVB)", value=False)
+    bottom_osc = st.radio("Lower Panel:", ["MACD (Standard)", "ZEMO (Elite Momentum)"])
     
     st.divider()
     st.subheader("Order Placement")
@@ -182,10 +202,9 @@ with st.sidebar:
         st.session_state.active_trades = []
         st.rerun()
 
-    # NEW: MULTI-ASSET GRID SELECTOR
     st.divider()
     st.subheader("🎛️ Multi-Asset Grid")
-    grid_tickers = st.multiselect("Select up to 4 assets to compare side-by-side:", list(FLAT_ASSETS.keys()), max_selections=4)
+    grid_tickers = st.multiselect("Select up to 4 assets to compare:", list(FLAT_ASSETS.keys()), max_selections=4)
 
     st.divider()
     with st.expander("💳 Local Deposit Portal"):
@@ -209,7 +228,7 @@ with main_col:
     
     render_live_ticker()
 
-    # Active Trades (Top for Mobile UX)
+    # Active Trades
     @st.fragment(run_every=2)
     def render_active_trades():
         st.divider()
@@ -273,24 +292,37 @@ with side_col:
     st.caption("🥈 **Lsk_Bull** (+85%)")
 
 # --- 8. FULL WIDTH PANORAMIC SECTIONS ---
-
-# 8A. SLOW LANE: Main Interactive Chart 
 st.divider()
 df = fetch_chart_data(ticker, t_frame)
 if not df.empty:
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
     
-    if chart_style == "Candlesticks (Pro)":
+    # 1. Main Price Traces
+    if chart_style == "Candlesticks":
         fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Price", increasing_line_color='#00ffbb', decreasing_line_color='#ff3355'), row=1, col=1)
     else:
         fig.add_trace(go.Scatter(x=df.index, y=df['Close'], line=dict(color='#00ffbb', width=2), name="Price"), row=1, col=1)
     
     if show_sma:
         fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], line=dict(color='#ff9900', width=1.5), name="SMA 20"), row=1, col=1)
+        
+    # 2. Add KVB (Kwacha Volatility Bands) if selected
+    if show_kvb:
+        fig.add_trace(go.Scatter(x=df.index, y=df['KVB_Upper'], line=dict(color='rgba(255, 51, 85, 0.5)', width=1, dash='dot'), name="KVB Upper"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['KVB_Lower'], line=dict(color='rgba(0, 255, 187, 0.5)', width=1, dash='dot'), fill='tonexty', fillcolor='rgba(0, 255, 187, 0.05)', name="KVB Lower"), row=1, col=1)
     
-    fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name="Momentum", marker_color='rgba(200, 200, 200, 0.3)'), row=2, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], line=dict(color='#00ffbb', width=1.2), name="MACD"), row=2, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], line=dict(color='#ff3355', width=1.2), name="Signal"), row=2, col=1)
+    # 3. Lower Panel Routing (MACD vs ZEMO)
+    if bottom_osc == "MACD (Standard)":
+        fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name="Momentum", marker_color='rgba(200, 200, 200, 0.3)'), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], line=dict(color='#00ffbb', width=1.2), name="MACD"), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], line=dict(color='#ff3355', width=1.2), name="Signal"), row=2, col=1)
+    else:
+        # Plot ZEMO
+        fig.add_trace(go.Scatter(x=df.index, y=df['ZEMO'], line=dict(color='#00ffbb', width=2), name="ZEMO"), row=2, col=1)
+        # Add Overbought/Oversold Lines
+        fig.add_hline(y=80, line_dash="dot", line_color="#ff3355", row=2, col=1, annotation_text="Overbought", annotation_position="top left")
+        fig.add_hline(y=20, line_dash="dot", line_color="#00ffbb", row=2, col=1, annotation_text="Oversold", annotation_position="bottom left")
+        fig.update_yaxes(range=[0, 100], row=2, col=1)
 
     fig.update_layout(
         template="plotly_dark", xaxis_rangeslider_visible=False, height=650, 
@@ -304,12 +336,11 @@ if not df.empty:
 else:
     st.warning("Awaiting market data connection...")
 
-# 8B. NEW: MULTI-ASSET GRID VIEW
+# 8B. MULTI-ASSET GRID VIEW
 if grid_tickers:
     st.divider()
     st.subheader("🎛️ Multi-Asset Correlation Grid")
     
-    # Create a 2-column grid layout
     grid_cols = st.columns(2)
     for i, asset_key in enumerate(grid_tickers):
         with grid_cols[i % 2]:
@@ -324,7 +355,6 @@ if grid_tickers:
                     margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11", 
                     yaxis=dict(side="right"), showlegend=False
                 )
-                # We turn off the toolbar for mini-charts to keep the UI perfectly clean
                 st.plotly_chart(gfig, use_container_width=True, config={'displayModeBar': False})
             else:
                 st.warning(f"Connecting feed for {asset_key}...")
