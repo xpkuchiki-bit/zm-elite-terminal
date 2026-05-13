@@ -204,7 +204,7 @@ with main_col:
     
     render_live_ticker()
 
-    # Active Trades (Top for Mobile UX)
+    # Active Trades
     @st.fragment(run_every=2)
     def render_active_trades():
         st.divider()
@@ -286,4 +286,25 @@ if not df.empty:
     fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], line=dict(color='#ff3355', width=1.2), name="Signal"), row=2, col=1)
 
     fig.update_layout(
-        template="plotly_dark", xaxis_rangeslider_visible=False, height
+        template="plotly_dark", xaxis_rangeslider_visible=False, height=650, 
+        paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11", margin=dict(t=10, b=10, l=0, r=0),
+        yaxis=dict(side="right", autorange=True, fixedrange=False), 
+        yaxis2=dict(side="right", autorange=True, fixedrange=False),
+        showlegend=False, dragmode='pan' 
+    )
+    pro_config = {'displayModeBar': True, 'scrollZoom': True, 'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape']}
+    st.plotly_chart(fig, use_container_width=True, config=pro_config)
+else:
+    st.warning("Awaiting market data connection...")
+
+st.divider()
+st.subheader("📰 Live Market News")
+live_news = fetch_live_news(ticker)
+if live_news:
+    for article in live_news:
+        st.markdown(f"**[{article['title']}]({article['link']})**")
+        st.caption(f"Source: {article['publisher']}")
+        st.write("---")
+else:
+    st.warning("🇿🇲 **09:00** - [Bank of Zambia Rate Decision](https://www.boz.zm/)")
+    st.info("🇺🇸 **14:30** - [Fed Inflation Data Released](https://www.federalreserve.gov/)")
