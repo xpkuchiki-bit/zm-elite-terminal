@@ -12,7 +12,7 @@ import numpy as np
 import time
 
 # --- 1. PRO UI CONFIGURATION ---
-# Native way to clear out the three-dot menu for users!
+# Native way to clear out the three-dot menu for users, protecting the sidebar arrow!
 st.set_page_config(
     layout="wide", 
     page_title="ZM Elite Terminal", 
@@ -24,6 +24,9 @@ st.set_page_config(
 st.markdown("""
     <style>
     .stApp { background-color: #0b0e11; color: white; }
+    
+    /* Hide the annoying Streamlit deploy button natively */
+    .stAppDeployButton { display: none !important; }
     
     div[data-testid="stMetricValue"] { font-size: 1.8rem; color: #00ffbb; }
     .stProgress > div > div > div > div { background-color: #00ffbb; }
@@ -65,6 +68,9 @@ ASSETS = {
         "S&P 500": "^GSPC", "Nasdaq 100": "^IXIC", "Bitcoin ETF (IBIT)": "IBIT"
     }
 }
+
+# Create a flat dictionary of all assets for the new Grid View
+FLAT_ASSETS = {name: ticker for category, assets in ASSETS.items() for name, ticker in assets.items()}
 
 # --- 3. SESSION STATE ---
 if 'balance' not in st.session_state: st.session_state.balance = 50000.00
@@ -176,6 +182,11 @@ with st.sidebar:
         st.session_state.active_trades = []
         st.rerun()
 
+    # NEW: MULTI-ASSET GRID SELECTOR
+    st.divider()
+    st.subheader("🎛️ Multi-Asset Grid")
+    grid_tickers = st.multiselect("Select up to 4 assets to compare side-by-side:", list(FLAT_ASSETS.keys()), max_selections=4)
+
     st.divider()
     with st.expander("💳 Local Deposit Portal"):
         st.radio("Network", ["MTN MoMo", "Airtel Money", "ZANACO App"])
@@ -262,6 +273,8 @@ with side_col:
     st.caption("🥈 **Lsk_Bull** (+85%)")
 
 # --- 8. FULL WIDTH PANORAMIC SECTIONS ---
+
+# 8A. SLOW LANE: Main Interactive Chart 
 st.divider()
 df = fetch_chart_data(ticker, t_frame)
 if not df.empty:
@@ -291,6 +304,32 @@ if not df.empty:
 else:
     st.warning("Awaiting market data connection...")
 
+# 8B. NEW: MULTI-ASSET GRID VIEW
+if grid_tickers:
+    st.divider()
+    st.subheader("🎛️ Multi-Asset Correlation Grid")
+    
+    # Create a 2-column grid layout
+    grid_cols = st.columns(2)
+    for i, asset_key in enumerate(grid_tickers):
+        with grid_cols[i % 2]:
+            st.markdown(f"<div style='text-align: center; color: #00ffbb; font-weight: bold; font-family: monospace; font-size: 1.2rem;'>{asset_key}</div>", unsafe_allow_html=True)
+            grid_tick = FLAT_ASSETS[asset_key]
+            gdf = fetch_chart_data(grid_tick, t_frame)
+            
+            if not gdf.empty:
+                gfig = go.Figure(data=[go.Candlestick(x=gdf.index, open=gdf['Open'], high=gdf['High'], low=gdf['Low'], close=gdf['Close'], increasing_line_color='#00ffbb', decreasing_line_color='#ff3355')])
+                gfig.update_layout(
+                    template="plotly_dark", xaxis_rangeslider_visible=False, height=300, 
+                    margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11", 
+                    yaxis=dict(side="right"), showlegend=False
+                )
+                # We turn off the toolbar for mini-charts to keep the UI perfectly clean
+                st.plotly_chart(gfig, use_container_width=True, config={'displayModeBar': False})
+            else:
+                st.warning(f"Connecting feed for {asset_key}...")
+
+# 8C. SLOW LANE: News Feed
 st.divider()
 st.subheader("📰 Live Market News")
 live_news = fetch_live_news(ticker)
