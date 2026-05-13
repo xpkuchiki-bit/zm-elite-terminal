@@ -12,24 +12,18 @@ import numpy as np
 import time
 
 # --- 1. PRO UI CONFIGURATION ---
-st.set_page_config(layout="wide", page_title="ZM Elite Terminal", page_icon="💹", initial_sidebar_state="expanded")
+# Native way to clear out the three-dot menu for users!
+st.set_page_config(
+    layout="wide", 
+    page_title="ZM Elite Terminal", 
+    page_icon="💹", 
+    initial_sidebar_state="expanded",
+    menu_items={'Get Help': None, 'Report a bug': None, 'About': None}
+)
 
 st.markdown("""
     <style>
     .stApp { background-color: #0b0e11; color: white; }
-    
-    /* 🔥 ULTRA-SAFE CSS: HIDES BRANDING BUT PROTECTS THE SIDEBAR ARROW 🔥 */
-    /* 1. Hides the "Deploy" text button */
-    .stAppDeployButton { display: none !important; }
-    
-    /* 2. Hides the GitHub/Share icons on the right side of the header */
-    header [data-testid="stToolbar"] { visibility: hidden !important; }
-    
-    /* 3. Hides the three-dot main menu */
-    #MainMenu { visibility: hidden !important; }
-    
-    /* 4. Ensures the header background is totally transparent so it blends in */
-    header { background: transparent !important; }
     
     div[data-testid="stMetricValue"] { font-size: 1.8rem; color: #00ffbb; }
     .stProgress > div > div > div > div { background-color: #00ffbb; }
@@ -204,7 +198,7 @@ with main_col:
     
     render_live_ticker()
 
-    # Active Trades
+    # Active Trades (Top for Mobile UX)
     @st.fragment(run_every=2)
     def render_active_trades():
         st.divider()
