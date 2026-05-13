@@ -18,13 +18,18 @@ st.markdown("""
     <style>
     .stApp { background-color: #0b0e11; color: white; }
     
-    /* 🔥 SURGICAL CSS FIX: HIDE BRANDING, KEEP SIDEBAR MENU 🔥 */
-    .stDeployButton { display: none !important; }
-    [data-testid="stToolbar"] { display: none !important; }
-    #MainMenu { display: none !important; }
+    /* 🔥 ULTRA-SAFE CSS: HIDES BRANDING BUT PROTECTS THE SIDEBAR ARROW 🔥 */
+    /* 1. Hides the "Deploy" text button */
+    .stAppDeployButton { display: none !important; }
     
-    /* Force the sidebar toggle button to always show and make it neon green! */
-    [data-testid="collapsedControl"] { display: flex !important; color: #00ffbb !important; }
+    /* 2. Hides the GitHub/Share icons on the right side of the header */
+    header [data-testid="stToolbar"] { visibility: hidden !important; }
+    
+    /* 3. Hides the three-dot main menu */
+    #MainMenu { visibility: hidden !important; }
+    
+    /* 4. Ensures the header background is totally transparent so it blends in */
+    header { background: transparent !important; }
     
     div[data-testid="stMetricValue"] { font-size: 1.8rem; color: #00ffbb; }
     .stProgress > div > div > div > div { background-color: #00ffbb; }
@@ -281,25 +286,4 @@ if not df.empty:
     fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], line=dict(color='#ff3355', width=1.2), name="Signal"), row=2, col=1)
 
     fig.update_layout(
-        template="plotly_dark", xaxis_rangeslider_visible=False, height=650, 
-        paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11", margin=dict(t=10, b=10, l=0, r=0),
-        yaxis=dict(side="right", autorange=True, fixedrange=False), 
-        yaxis2=dict(side="right", autorange=True, fixedrange=False),
-        showlegend=False, dragmode='pan' 
-    )
-    pro_config = {'displayModeBar': True, 'scrollZoom': True, 'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape']}
-    st.plotly_chart(fig, use_container_width=True, config=pro_config)
-else:
-    st.warning("Awaiting market data connection...")
-
-st.divider()
-st.subheader("📰 Live Market News")
-live_news = fetch_live_news(ticker)
-if live_news:
-    for article in live_news:
-        st.markdown(f"**[{article['title']}]({article['link']})**")
-        st.caption(f"Source: {article['publisher']}")
-        st.write("---")
-else:
-    st.warning("🇿🇲 **09:00** - [Bank of Zambia Rate Decision](https://www.boz.zm/)")
-    st.info("🇺🇸 **14:30** - [Fed Inflation Data Released](https://www.federalreserve.gov/)")
+        template="plotly_dark", xaxis_rangeslider_visible=False, height
