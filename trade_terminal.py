@@ -12,14 +12,14 @@ import numpy as np
 import time
 
 # --- 1. PRO UI CONFIGURATION ---
-st.set_page_config(layout="wide", page_title="ZM Elite Terminal", page_icon="💹")
+# Added initial_sidebar_state="expanded" so your menu is never trapped again
+st.set_page_config(layout="wide", page_title="ZM Elite Terminal", page_icon="💹", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
     .stApp { background-color: #0b0e11; color: white; }
     
-    /* HIDE STREAMLIT BRANDING & GITHUB ICONS */
-    header {visibility: hidden !important;}
+    /* HIDE STREAMLIT BRANDING ONLY (Leaving the sidebar toggle intact!) */
     #MainMenu {visibility: hidden !important;}
     footer {visibility: hidden !important;}
     [data-testid="stToolbar"] {visibility: hidden !important;}
@@ -198,7 +198,7 @@ with main_col:
     
     render_live_ticker()
 
-    # 7B. FAST LANE: Active Trades (MOVED TO TOP FOR MOBILE UX)
+    # 7B. FAST LANE: Active Trades (TOP FOR MOBILE UX)
     @st.fragment(run_every=2)
     def render_active_trades():
         st.divider()
@@ -263,7 +263,7 @@ with side_col:
 
 # --- 8. FULL WIDTH PANORAMIC SECTIONS ---
 
-# 8A. SLOW LANE: Solid Interactive Chart (MOVED BELOW EVERYTHING FOR PERFECT MOBILE SCROLLING)
+# 8A. SLOW LANE: Solid Interactive Chart 
 st.divider()
 df = fetch_chart_data(ticker, t_frame)
 if not df.empty:
