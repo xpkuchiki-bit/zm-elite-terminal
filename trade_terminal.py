@@ -138,6 +138,11 @@ def fetch_live_news(symbol):
     except:
         return []
 
+# Helper function to convert dataframes to CSV for download
+@st.cache_data
+def convert_df(df):
+    return df.to_csv(index=True).encode('utf-8')
+
 # --- 6. SIDEBAR MENU & EXECUTION ---
 with st.sidebar:
     st.markdown("<h2 style='margin-top:-20px;'>🇿🇲 ZM Elite</h2>", unsafe_allow_html=True)
@@ -178,6 +183,44 @@ with st.sidebar:
         st.session_state.balance = 50000.00
         st.session_state.active_trades = []
         st.rerun()
+
+    st.divider()
+    
+    # NEW: DATA & EXPORT CENTER
+    with st.expander("💽 Data & Export Center"):
+        st.caption("Export raw market data for Excel/Python backtesting.")
+        export_df = fetch_chart_data(ticker, t_frame)
+        if not export_df.empty:
+            # We filter just the OHLCV columns so it's clean for the user
+            clean_df = export_df[['Open', 'High', 'Low', 'Close', 'Volume']]
+            csv_data = convert_df(clean_df)
+            st.download_button(
+                label=f"📥 Download {ticker} Data",
+                data=csv_data,
+                file_name=f"{ticker}_{t_frame}_MarketData.csv",
+                mime='text/csv',
+                use_container_width=True
+            )
+        
+        if len(st.session_state.active_trades) > 0:
+            ledger_df = pd.DataFrame(st.session_state.active_trades)
+            ledger_csv = ledger_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="🧾 Download My Trades",
+                data=ledger_csv,
+                file_name="Trade_Ledger.csv",
+                mime='text/csv',
+                use_container_width=True
+            )
+
+    with st.expander("💳 Local Deposit Portal"):
+        st.radio("Network", ["MTN MoMo", "Airtel Money", "ZANACO App"])
+        st.text_input("Zambian Number")
+        st.button("Request USSD Push")
+        
+    with st.expander("🎧 Priority Support"):
+        st.text_area("Issue description...")
+        st.button("Open Ticket")
 
 # --- 7. MAIN ZERO-SCROLL DASHBOARD ---
 # Top Row: Just the Ticker
